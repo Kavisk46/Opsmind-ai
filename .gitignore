@@ -216,3 +216,8 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Node/frontend: the Python "lib/" rule above unintentionally matches
+# frontend/src/lib (a normal Next.js source directory, not a build artifact).
+!frontend/src/lib/
+!frontend/src/lib/**
