@@ -1,8 +1,10 @@
+import { PageHeader } from "@/components/PageHeader";
+
 export default function Home() {
   return (
-    <main>
-      <h1>OpsMind AI</h1>
-      <p>Enterprise Knowledge Intelligence Platform</p>
-    </main>
+    <PageHeader
+      title="Dashboard"
+      subtitle="Enterprise Knowledge Intelligence Platform"
+    />
   );
 }
