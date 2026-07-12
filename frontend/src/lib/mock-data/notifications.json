@@ -1,0 +1,26 @@
+[
+  {
+    "id": "1",
+    "title": "New document indexed",
+    "description": "Q3-financial-summary.pdf is ready to search",
+    "timestamp": "2026-07-13T10:05:00Z",
+    "status": "info",
+    "read": false
+  },
+  {
+    "id": "2",
+    "title": "AI Assistant improved",
+    "description": "Response accuracy increased by 12% this week",
+    "timestamp": "2026-07-13T08:30:00Z",
+    "status": "success",
+    "read": false
+  },
+  {
+    "id": "3",
+    "title": "Storage almost full",
+    "description": "You've used 92% of your workspace quota",
+    "timestamp": "2026-07-12T15:45:00Z",
+    "status": "warning",
+    "read": true
+  }
+]

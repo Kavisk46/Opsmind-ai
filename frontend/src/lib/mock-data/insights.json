@@ -1,0 +1,26 @@
+[
+  {
+    "id": "1",
+    "title": "Document duplication detected",
+    "description": "12 documents in 'Marketing' appear to be near-duplicates. Consolidating could reduce search noise.",
+    "category": "Optimization",
+    "confidence": 92,
+    "actions": ["Review duplicates", "Dismiss"]
+  },
+  {
+    "id": "2",
+    "title": "Rising support query volume",
+    "description": "Questions about 'billing' have increased 34% this week. Consider updating the FAQ.",
+    "category": "Trend",
+    "confidence": 81,
+    "actions": ["View queries", "Create FAQ"]
+  },
+  {
+    "id": "3",
+    "title": "Underused knowledge base",
+    "description": "The 'Onboarding' collection hasn't been searched in 30 days. It may need promotion or archiving.",
+    "category": "Recommendation",
+    "confidence": 68,
+    "actions": ["Promote content", "Archive"]
+  }
+]

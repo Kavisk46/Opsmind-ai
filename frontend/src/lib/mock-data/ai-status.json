@@ -1,0 +1,13 @@
+{
+  "status": "operational",
+  "uptime": "99.98%",
+  "queryTrend": [
+    { "day": "Mon", "queries": 320 },
+    { "day": "Tue", "queries": 410 },
+    { "day": "Wed", "queries": 380 },
+    { "day": "Thu", "queries": 460 },
+    { "day": "Fri", "queries": 520 },
+    { "day": "Sat", "queries": 290 },
+    { "day": "Sun", "queries": 310 }
+  ]
+}

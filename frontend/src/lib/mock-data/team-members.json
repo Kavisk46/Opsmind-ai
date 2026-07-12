@@ -1,0 +1,21 @@
+[
+  {
+    "id": "1",
+    "name": "Ava Thompson",
+    "role": "Product Lead",
+    "status": "online"
+  },
+  {
+    "id": "2",
+    "name": "Marcus Chen",
+    "role": "Data Analyst",
+    "status": "online"
+  },
+  { "id": "3", "name": "Priya Nair", "role": "AI Engineer", "status": "away" },
+  {
+    "id": "4",
+    "name": "Diego Fernandez",
+    "role": "Support Specialist",
+    "status": "offline"
+  }
+]

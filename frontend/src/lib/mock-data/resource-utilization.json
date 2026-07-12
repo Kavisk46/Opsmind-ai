@@ -1,0 +1,9 @@
+[
+  { "day": "Mon", "cpu": 38, "memory": 52, "network": 21 },
+  { "day": "Tue", "cpu": 45, "memory": 58, "network": 28 },
+  { "day": "Wed", "cpu": 41, "memory": 61, "network": 25 },
+  { "day": "Thu", "cpu": 52, "memory": 65, "network": 33 },
+  { "day": "Fri", "cpu": 60, "memory": 70, "network": 39 },
+  { "day": "Sat", "cpu": 30, "memory": 48, "network": 18 },
+  { "day": "Sun", "cpu": 28, "memory": 45, "network": 15 }
+]

@@ -1,0 +1,26 @@
+[
+  {
+    "id": "ai-inference",
+    "name": "AI Inference Engine",
+    "status": "operational",
+    "uptime": "99.98%"
+  },
+  {
+    "id": "search-index",
+    "name": "Search Index",
+    "status": "operational",
+    "uptime": "99.95%"
+  },
+  {
+    "id": "document-processing",
+    "name": "Document Processing",
+    "status": "degraded",
+    "uptime": "98.20%"
+  },
+  {
+    "id": "auth-service",
+    "name": "Authentication Service",
+    "status": "operational",
+    "uptime": "100%"
+  }
+]

@@ -1,0 +1,30 @@
+[
+  {
+    "id": "documents",
+    "label": "Documents Indexed",
+    "value": "12,489",
+    "change": 8.2,
+    "isPositive": true
+  },
+  {
+    "id": "queries",
+    "label": "AI Queries Today",
+    "value": "1,204",
+    "change": 12.5,
+    "isPositive": true
+  },
+  {
+    "id": "members",
+    "label": "Active Team Members",
+    "value": "34",
+    "change": -2.1,
+    "isPositive": false
+  },
+  {
+    "id": "response",
+    "label": "Avg. Response Time",
+    "value": "1.8s",
+    "change": -5.4,
+    "isPositive": true
+  }
+]

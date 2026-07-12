@@ -1,0 +1,6 @@
+[
+  { "id": "cpu", "label": "CPU Utilization", "value": 42 },
+  { "id": "memory", "label": "Memory Usage", "value": 68 },
+  { "id": "storage", "label": "Storage Capacity", "value": 91 },
+  { "id": "network", "label": "Network Throughput", "value": 34 }
+]

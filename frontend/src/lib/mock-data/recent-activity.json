@@ -1,0 +1,42 @@
+[
+  {
+    "id": "1",
+    "actor": "Ava Thompson",
+    "action": "uploaded",
+    "target": "Q3-financial-summary.pdf",
+    "type": "Upload",
+    "timestamp": "2026-07-13T09:15:00Z"
+  },
+  {
+    "id": "2",
+    "actor": "AI Assistant",
+    "action": "answered",
+    "target": "5 questions in #product-support",
+    "type": "AI",
+    "timestamp": "2026-07-13T08:42:00Z"
+  },
+  {
+    "id": "3",
+    "actor": "Marcus Chen",
+    "action": "created",
+    "target": "Weekly Analytics Report",
+    "type": "Report",
+    "timestamp": "2026-07-12T17:30:00Z"
+  },
+  {
+    "id": "4",
+    "actor": "Priya Nair",
+    "action": "indexed",
+    "target": "42 new documents",
+    "type": "Index",
+    "timestamp": "2026-07-12T14:05:00Z"
+  },
+  {
+    "id": "5",
+    "actor": "Diego Fernandez",
+    "action": "resolved",
+    "target": "3 support tickets",
+    "type": "Support",
+    "timestamp": "2026-07-12T11:20:00Z"
+  }
+]

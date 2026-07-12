@@ -1,19 +1,57 @@
 "use client";
 
-import { Bell } from "lucide-react";
+import {
+  Bell,
+  CheckCircle2,
+  Info,
+  TriangleAlert,
+  type LucideIcon,
+} from "lucide-react";
 import { useId } from "react";
 
+import { ActivityList, ActivityListItem } from "@/components/ActivityList";
+import type { BadgeProps } from "@/components/ui/badge";
 import { useDisclosure } from "@/hooks/use-disclosure";
+import notificationsData from "@/lib/mock-data/notifications.json";
 import { cn, POPOVER_PANEL_CLASS } from "@/lib/utils";
 
-interface NotificationButtonProps {
-  count?: number;
+type NotificationStatus = "info" | "success" | "warning";
+
+interface NotificationEntry {
+  id: string;
+  title: string;
+  description: string;
+  timestamp: string;
+  status: NotificationStatus;
+  read: boolean;
 }
 
-export function NotificationButton({ count = 0 }: NotificationButtonProps) {
+const notifications = notificationsData as NotificationEntry[];
+
+const STATUS_ICON: Record<NotificationStatus, LucideIcon> = {
+  info: Info,
+  success: CheckCircle2,
+  warning: TriangleAlert,
+};
+
+const STATUS_ICON_CLASS: Record<NotificationStatus, string> = {
+  info: "text-info",
+  success: "text-success",
+  warning: "text-warning",
+};
+
+const STATUS_BADGE_VARIANT: Record<NotificationStatus, BadgeProps["variant"]> =
+  {
+    info: "info",
+    success: "success",
+    warning: "warning",
+  };
+
+export function NotificationButton() {
   const { isOpen, toggle, containerRef, triggerRef } = useDisclosure();
   const panelId = useId();
-  const hasBadge = count > 0;
+  const unreadCount = notifications.filter((n) => !n.read).length;
+  const hasBadge = unreadCount > 0;
 
   return (
     <div ref={containerRef} className="relative">
@@ -24,7 +62,7 @@ export function NotificationButton({ count = 0 }: NotificationButtonProps) {
         aria-expanded={isOpen}
         aria-controls={panelId}
         aria-label={
-          hasBadge ? `Notifications, ${count} unread` : "Notifications"
+          hasBadge ? `Notifications, ${unreadCount} unread` : "Notifications"
         }
         className="relative inline-flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
@@ -34,7 +72,7 @@ export function NotificationButton({ count = 0 }: NotificationButtonProps) {
             className="absolute top-1 right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-medium text-destructive-foreground"
             aria-hidden="true"
           >
-            {count > 9 ? "9+" : count}
+            {unreadCount > 9 ? "9+" : unreadCount}
           </span>
         )}
       </button>
@@ -46,13 +84,47 @@ export function NotificationButton({ count = 0 }: NotificationButtonProps) {
           aria-label="Notifications"
           className={cn(
             POPOVER_PANEL_CLASS,
-            "absolute right-0 mt-2 w-72 max-w-[calc(100vw-2rem)] p-4"
+            "absolute right-0 mt-2 w-80 max-w-[calc(100vw-2rem)] p-4"
           )}
         >
-          <p className="text-sm font-medium">Notifications</p>
-          <p className="mt-2 text-sm text-muted-foreground">
-            You&apos;re all caught up. Notifications will appear here.
-          </p>
+          <p className="text-sm font-medium text-foreground">Notifications</p>
+          <div className="mt-3">
+            <ActivityList>
+              {notifications.map((notification) => {
+                const StatusIcon = STATUS_ICON[notification.status];
+                return (
+                  <ActivityListItem
+                    key={notification.id}
+                    leading={
+                      <StatusIcon
+                        className={cn(
+                          "h-5 w-5",
+                          STATUS_ICON_CLASS[notification.status]
+                        )}
+                        aria-hidden="true"
+                      />
+                    }
+                    title={
+                      <span
+                        className={cn(
+                          !notification.read && "font-medium text-foreground"
+                        )}
+                      >
+                        {notification.title}
+                      </span>
+                    }
+                    description={notification.description}
+                    timestamp={notification.timestamp}
+                    badge={{
+                      label: notification.status,
+                      variant: STATUS_BADGE_VARIANT[notification.status],
+                      className: "capitalize",
+                    }}
+                  />
+                );
+              })}
+            </ActivityList>
+          </div>
         </div>
       )}
     </div>
