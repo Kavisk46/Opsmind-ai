@@ -371,8 +371,7 @@ This project is licensed under the **MIT License** — see the [LICENSE](./LICEN
 
 ## Author
 
-**[Your Name]**
+**[Kavimugil SK]**
 
-- LinkedIn: [Your LinkedIn URL]
-- Portfolio: [Your Portfolio URL]
-- Email: [your.email@example.com]
+- Linkedin : [www.linkedin.com/in/kavimugil-sk]
+- Email: [skkavi4618@gmail.com]
