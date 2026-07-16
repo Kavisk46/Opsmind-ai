@@ -11,6 +11,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
+import { trapTabFocus } from "@/hooks/use-focus-trap";
 import { cn } from "@/lib/utils";
 import { useSidebarStore } from "@/store/sidebar-store";
 
@@ -95,6 +96,10 @@ export function Sidebar() {
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
         close();
+        return;
+      }
+      if (asideRef.current) {
+        trapTabFocus(event, asideRef.current);
       }
     }
     document.addEventListener("keydown", handleKeyDown);

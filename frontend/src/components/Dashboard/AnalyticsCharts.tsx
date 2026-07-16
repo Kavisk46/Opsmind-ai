@@ -1,6 +1,18 @@
-import { ApiUsageChart } from "./ApiUsageChart";
-import { ResourceUtilizationChart } from "./ResourceUtilizationChart";
-import { TrafficChart } from "./TrafficChart";
+import dynamic from "next/dynamic";
+
+// Dynamically imported so recharts (and each chart's own bundle weight)
+// loads in its own chunk instead of the Dashboard's main bundle.
+const ApiUsageChart = dynamic(() =>
+  import("./ApiUsageChart").then((mod) => mod.ApiUsageChart)
+);
+const ResourceUtilizationChart = dynamic(() =>
+  import("./ResourceUtilizationChart").then(
+    (mod) => mod.ResourceUtilizationChart
+  )
+);
+const TrafficChart = dynamic(() =>
+  import("./TrafficChart").then((mod) => mod.TrafficChart)
+);
 
 export function AnalyticsCharts() {
   return (

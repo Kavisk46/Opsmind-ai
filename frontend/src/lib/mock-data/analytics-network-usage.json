@@ -1,0 +1,302 @@
+[
+  {
+    "date": "2026-05-16",
+    "inboundMbps": 102,
+    "outboundMbps": 43
+  },
+  {
+    "date": "2026-05-17",
+    "inboundMbps": 63,
+    "outboundMbps": 43
+  },
+  {
+    "date": "2026-05-18",
+    "inboundMbps": 95,
+    "outboundMbps": 88
+  },
+  {
+    "date": "2026-05-19",
+    "inboundMbps": 103,
+    "outboundMbps": 54
+  },
+  {
+    "date": "2026-05-20",
+    "inboundMbps": 107,
+    "outboundMbps": 67
+  },
+  {
+    "date": "2026-05-21",
+    "inboundMbps": 101,
+    "outboundMbps": 74
+  },
+  {
+    "date": "2026-05-22",
+    "inboundMbps": 121,
+    "outboundMbps": 76
+  },
+  {
+    "date": "2026-05-23",
+    "inboundMbps": 68,
+    "outboundMbps": 57
+  },
+  {
+    "date": "2026-05-24",
+    "inboundMbps": 99,
+    "outboundMbps": 53
+  },
+  {
+    "date": "2026-05-25",
+    "inboundMbps": 112,
+    "outboundMbps": 83
+  },
+  {
+    "date": "2026-05-26",
+    "inboundMbps": 122,
+    "outboundMbps": 78
+  },
+  {
+    "date": "2026-05-27",
+    "inboundMbps": 103,
+    "outboundMbps": 57
+  },
+  {
+    "date": "2026-05-28",
+    "inboundMbps": 114,
+    "outboundMbps": 82
+  },
+  {
+    "date": "2026-05-29",
+    "inboundMbps": 124,
+    "outboundMbps": 86
+  },
+  {
+    "date": "2026-05-30",
+    "inboundMbps": 100,
+    "outboundMbps": 39
+  },
+  {
+    "date": "2026-05-31",
+    "inboundMbps": 84,
+    "outboundMbps": 41
+  },
+  {
+    "date": "2026-06-01",
+    "inboundMbps": 134,
+    "outboundMbps": 51
+  },
+  {
+    "date": "2026-06-02",
+    "inboundMbps": 97,
+    "outboundMbps": 68
+  },
+  {
+    "date": "2026-06-03",
+    "inboundMbps": 132,
+    "outboundMbps": 58
+  },
+  {
+    "date": "2026-06-04",
+    "inboundMbps": 109,
+    "outboundMbps": 85
+  },
+  {
+    "date": "2026-06-05",
+    "inboundMbps": 144,
+    "outboundMbps": 86
+  },
+  {
+    "date": "2026-06-06",
+    "inboundMbps": 81,
+    "outboundMbps": 41
+  },
+  {
+    "date": "2026-06-07",
+    "inboundMbps": 66,
+    "outboundMbps": 38
+  },
+  {
+    "date": "2026-06-08",
+    "inboundMbps": 111,
+    "outboundMbps": 89
+  },
+  {
+    "date": "2026-06-09",
+    "inboundMbps": 135,
+    "outboundMbps": 67
+  },
+  {
+    "date": "2026-06-10",
+    "inboundMbps": 139,
+    "outboundMbps": 88
+  },
+  {
+    "date": "2026-06-11",
+    "inboundMbps": 129,
+    "outboundMbps": 68
+  },
+  {
+    "date": "2026-06-12",
+    "inboundMbps": 101,
+    "outboundMbps": 67
+  },
+  {
+    "date": "2026-06-13",
+    "inboundMbps": 83,
+    "outboundMbps": 52
+  },
+  {
+    "date": "2026-06-14",
+    "inboundMbps": 94,
+    "outboundMbps": 43
+  },
+  {
+    "date": "2026-06-15",
+    "inboundMbps": 131,
+    "outboundMbps": 59
+  },
+  {
+    "date": "2026-06-16",
+    "inboundMbps": 142,
+    "outboundMbps": 59
+  },
+  {
+    "date": "2026-06-17",
+    "inboundMbps": 121,
+    "outboundMbps": 53
+  },
+  {
+    "date": "2026-06-18",
+    "inboundMbps": 124,
+    "outboundMbps": 89
+  },
+  {
+    "date": "2026-06-19",
+    "inboundMbps": 143,
+    "outboundMbps": 86
+  },
+  {
+    "date": "2026-06-20",
+    "inboundMbps": 105,
+    "outboundMbps": 61
+  },
+  {
+    "date": "2026-06-21",
+    "inboundMbps": 72,
+    "outboundMbps": 38
+  },
+  {
+    "date": "2026-06-22",
+    "inboundMbps": 115,
+    "outboundMbps": 61
+  },
+  {
+    "date": "2026-06-23",
+    "inboundMbps": 115,
+    "outboundMbps": 67
+  },
+  {
+    "date": "2026-06-24",
+    "inboundMbps": 147,
+    "outboundMbps": 53
+  },
+  {
+    "date": "2026-06-25",
+    "inboundMbps": 103,
+    "outboundMbps": 69
+  },
+  {
+    "date": "2026-06-26",
+    "inboundMbps": 141,
+    "outboundMbps": 71
+  },
+  {
+    "date": "2026-06-27",
+    "inboundMbps": 97,
+    "outboundMbps": 54
+  },
+  {
+    "date": "2026-06-28",
+    "inboundMbps": 82,
+    "outboundMbps": 51
+  },
+  {
+    "date": "2026-06-29",
+    "inboundMbps": 133,
+    "outboundMbps": 75
+  },
+  {
+    "date": "2026-06-30",
+    "inboundMbps": 99,
+    "outboundMbps": 80
+  },
+  {
+    "date": "2026-07-01",
+    "inboundMbps": 103,
+    "outboundMbps": 54
+  },
+  {
+    "date": "2026-07-02",
+    "inboundMbps": 133,
+    "outboundMbps": 75
+  },
+  {
+    "date": "2026-07-03",
+    "inboundMbps": 112,
+    "outboundMbps": 66
+  },
+  {
+    "date": "2026-07-04",
+    "inboundMbps": 90,
+    "outboundMbps": 57
+  },
+  {
+    "date": "2026-07-05",
+    "inboundMbps": 76,
+    "outboundMbps": 54
+  },
+  {
+    "date": "2026-07-06",
+    "inboundMbps": 144,
+    "outboundMbps": 65
+  },
+  {
+    "date": "2026-07-07",
+    "inboundMbps": 107,
+    "outboundMbps": 70
+  },
+  {
+    "date": "2026-07-08",
+    "inboundMbps": 114,
+    "outboundMbps": 90
+  },
+  {
+    "date": "2026-07-09",
+    "inboundMbps": 104,
+    "outboundMbps": 77
+  },
+  {
+    "date": "2026-07-10",
+    "inboundMbps": 113,
+    "outboundMbps": 53
+  },
+  {
+    "date": "2026-07-11",
+    "inboundMbps": 98,
+    "outboundMbps": 62
+  },
+  {
+    "date": "2026-07-12",
+    "inboundMbps": 89,
+    "outboundMbps": 50
+  },
+  {
+    "date": "2026-07-13",
+    "inboundMbps": 94,
+    "outboundMbps": 86
+  },
+  {
+    "date": "2026-07-14",
+    "inboundMbps": 119,
+    "outboundMbps": 82
+  }
+]

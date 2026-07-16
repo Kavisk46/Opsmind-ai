@@ -28,6 +28,7 @@ export function AIStatus() {
   return (
     <ChartCard
       title="AI Assistant Status"
+      titleLevel="h2"
       description="Query volume over the last 7 days"
       className="lg:col-span-2"
       headerExtra={

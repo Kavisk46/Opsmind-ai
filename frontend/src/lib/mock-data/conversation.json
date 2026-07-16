@@ -1,0 +1,68 @@
+[
+  {
+    "id": "1",
+    "role": "user",
+    "content": "What were our top support topics this week?",
+    "createdAt": "2026-07-13T09:00:00Z"
+  },
+  {
+    "id": "2",
+    "role": "assistant",
+    "content": "Billing questions were the most common topic this week, up 34% from last week. I can pull the full breakdown if you'd like.",
+    "createdAt": "2026-07-13T09:00:04Z"
+  },
+  {
+    "id": "3",
+    "role": "user",
+    "content": "Yes, please show me the breakdown.",
+    "createdAt": "2026-07-13T09:00:20Z"
+  },
+  {
+    "id": "4",
+    "role": "assistant",
+    "content": "Here's the breakdown: Billing (42%), Login issues (18%), Feature requests (15%), Bugs (12%), Other (13%).",
+    "createdAt": "2026-07-13T09:00:24Z"
+  },
+  {
+    "id": "5",
+    "role": "assistant",
+    "content": "Want me to compare this against last month's breakdown too?",
+    "createdAt": "2026-07-13T09:00:27Z"
+  },
+  {
+    "id": "6",
+    "role": "user",
+    "content": "Yes, and flag anything that changed by more than 10%.",
+    "createdAt": "2026-07-13T09:01:05Z"
+  },
+  {
+    "id": "7",
+    "role": "user",
+    "content": "Also include the trend for the last quarter if you have it.",
+    "createdAt": "2026-07-13T09:01:12Z"
+  },
+  {
+    "id": "8",
+    "role": "assistant",
+    "content": "Here's the query I used, in case you want to reproduce it:\n\n```sql\nSELECT date_trunc('week', created_at) AS week,\n       topic,\n       COUNT(*) AS tickets\nFROM support_tickets\nWHERE created_at >= NOW() - INTERVAL '90 days'\nGROUP BY 1, 2\nORDER BY 1;\n```",
+    "createdAt": "2026-07-13T09:01:40Z"
+  },
+  {
+    "id": "9",
+    "role": "assistant",
+    "content": "And the comparison you asked for:\n\n| Topic | This week | Last month | Change |\n| --- | --- | --- | --- |\n| Billing | 42% | 31% | +11% |\n| Login issues | 18% | 20% | -2% |\n| Feature requests | 15% | 17% | -2% |\n| Bugs | 12% | 15% | -3% |\n| Other | 13% | 17% | -4% |\n\nBilling is the only topic that moved more than 10%.",
+    "createdAt": "2026-07-13T09:01:45Z"
+  },
+  {
+    "id": "10",
+    "role": "user",
+    "content": "Nice, can you drop the relevant links so I can dig in myself?",
+    "createdAt": "2026-07-13T09:02:10Z"
+  },
+  {
+    "id": "11",
+    "role": "assistant",
+    "content": "Sure — here's where to look:\n\n- [Support ticket dashboard](https://example.com/dashboard)\n- [Billing escalation runbook](https://example.com/runbook)\n- [Weekly trend chart](https://example.com/trend-chart)\n\n![Weekly ticket volume chart](https://placehold.co/480x240?text=Ticket+Volume)",
+    "createdAt": "2026-07-13T09:02:15Z"
+  }
+]

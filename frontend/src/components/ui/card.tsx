@@ -26,12 +26,17 @@ export function CardHeader({
   );
 }
 
-export function CardTitle({
-  className,
-  ...props
-}: HTMLAttributes<HTMLHeadingElement>) {
+interface CardTitleProps extends HTMLAttributes<HTMLHeadingElement> {
+  /** Defaults to h3 — override when a Card's title is the first heading
+   * after the page's h1 (no intervening h2 section), so the outline
+   * doesn't skip a level. */
+  level?: "h1" | "h2" | "h3" | "h4" | "h5" | "h6";
+}
+
+export function CardTitle({ className, level = "h3", ...props }: CardTitleProps) {
+  const Heading = level;
   return (
-    <h3
+    <Heading
       className={cn("text-sm font-semibold text-foreground", className)}
       {...props}
     />

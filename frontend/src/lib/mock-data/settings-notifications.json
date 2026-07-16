@@ -1,0 +1,44 @@
+{
+  "categories": [
+    {
+      "id": "product",
+      "label": "Product updates",
+      "description": "New features and improvements.",
+      "email": true,
+      "push": false,
+      "inApp": true
+    },
+    {
+      "id": "security",
+      "label": "Security alerts",
+      "description": "Sign-ins, password changes, and suspicious activity.",
+      "email": true,
+      "push": true,
+      "inApp": true
+    },
+    {
+      "id": "mentions",
+      "label": "Mentions",
+      "description": "When someone mentions you in a comment or document.",
+      "email": true,
+      "push": true,
+      "inApp": true
+    },
+    {
+      "id": "digest",
+      "label": "Weekly digest",
+      "description": "A summary of activity from the past week.",
+      "email": false,
+      "push": false,
+      "inApp": false
+    },
+    {
+      "id": "marketing",
+      "label": "Marketing",
+      "description": "Tips, offers, and product announcements.",
+      "email": false,
+      "push": false,
+      "inApp": false
+    }
+  ]
+}

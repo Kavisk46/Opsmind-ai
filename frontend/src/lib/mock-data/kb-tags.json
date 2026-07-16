@@ -1,0 +1,10 @@
+[
+  { "id": "tag-api", "name": "API" },
+  { "id": "tag-onboarding", "name": "Onboarding" },
+  { "id": "tag-billing", "name": "Billing" },
+  { "id": "tag-security", "name": "Security" },
+  { "id": "tag-guide", "name": "Guide" },
+  { "id": "tag-policy", "name": "Policy" },
+  { "id": "tag-architecture", "name": "Architecture" },
+  { "id": "tag-faq", "name": "FAQ" }
+]

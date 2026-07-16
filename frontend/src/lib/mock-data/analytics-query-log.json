@@ -1,0 +1,306 @@
+[
+  {
+    "id": "q-038",
+    "timestamp": "2026-07-14T12:44:15.451Z",
+    "user": "Priya Nair",
+    "category": "Product Questions",
+    "status": "success",
+    "responseMs": 217
+  },
+  {
+    "id": "q-031",
+    "timestamp": "2026-07-13T15:12:15.008Z",
+    "user": "Elena Torres",
+    "category": "Product Questions",
+    "status": "success",
+    "responseMs": 121
+  },
+  {
+    "id": "q-029",
+    "timestamp": "2026-07-13T09:17:02.451Z",
+    "user": "Jordan Blake",
+    "category": "Billing",
+    "status": "success",
+    "responseMs": 193
+  },
+  {
+    "id": "q-024",
+    "timestamp": "2026-07-12T23:49:42.482Z",
+    "user": "Jordan Blake",
+    "category": "Product Questions",
+    "status": "error",
+    "responseMs": 1030
+  },
+  {
+    "id": "q-034",
+    "timestamp": "2026-07-12T23:06:44.696Z",
+    "user": "Elena Torres",
+    "category": "Technical Support",
+    "status": "success",
+    "responseMs": 335
+  },
+  {
+    "id": "q-001",
+    "timestamp": "2026-07-12T21:52:51.979Z",
+    "user": "Aisha Rahman",
+    "category": "Product Questions",
+    "status": "error",
+    "responseMs": 586
+  },
+  {
+    "id": "q-016",
+    "timestamp": "2026-07-11T22:09:39.201Z",
+    "user": "Priya Nair",
+    "category": "Security & Compliance",
+    "status": "success",
+    "responseMs": 201
+  },
+  {
+    "id": "q-032",
+    "timestamp": "2026-07-11T08:56:33.639Z",
+    "user": "Diego Fernandez",
+    "category": "Billing",
+    "status": "error",
+    "responseMs": 313
+  },
+  {
+    "id": "q-025",
+    "timestamp": "2026-07-08T15:31:59.833Z",
+    "user": "Elena Torres",
+    "category": "Other",
+    "status": "success",
+    "responseMs": 432
+  },
+  {
+    "id": "q-035",
+    "timestamp": "2026-07-05T07:59:06.383Z",
+    "user": "Marcus Webb",
+    "category": "Billing",
+    "status": "success",
+    "responseMs": 177
+  },
+  {
+    "id": "q-002",
+    "timestamp": "2026-07-04T14:46:47.061Z",
+    "user": "Priya Nair",
+    "category": "Product Questions",
+    "status": "error",
+    "responseMs": 448
+  },
+  {
+    "id": "q-022",
+    "timestamp": "2026-07-04T14:28:09.999Z",
+    "user": "Diego Fernandez",
+    "category": "Security & Compliance",
+    "status": "success",
+    "responseMs": 443
+  },
+  {
+    "id": "q-023",
+    "timestamp": "2026-07-03T15:26:50.718Z",
+    "user": "Aisha Rahman",
+    "category": "Onboarding",
+    "status": "success",
+    "responseMs": 423
+  },
+  {
+    "id": "q-008",
+    "timestamp": "2026-07-02T05:00:12.407Z",
+    "user": "Sam Okafor",
+    "category": "Billing",
+    "status": "success",
+    "responseMs": 134
+  },
+  {
+    "id": "q-026",
+    "timestamp": "2026-06-30T04:14:28.162Z",
+    "user": "Jordan Blake",
+    "category": "Technical Support",
+    "status": "success",
+    "responseMs": 139
+  },
+  {
+    "id": "q-010",
+    "timestamp": "2026-06-29T10:06:48.903Z",
+    "user": "Aisha Rahman",
+    "category": "Onboarding",
+    "status": "success",
+    "responseMs": 156
+  },
+  {
+    "id": "q-018",
+    "timestamp": "2026-06-28T17:08:33.692Z",
+    "user": "Aisha Rahman",
+    "category": "Product Questions",
+    "status": "error",
+    "responseMs": 925
+  },
+  {
+    "id": "q-009",
+    "timestamp": "2026-06-27T09:35:55.219Z",
+    "user": "Aisha Rahman",
+    "category": "Technical Support",
+    "status": "success",
+    "responseMs": 493
+  },
+  {
+    "id": "q-005",
+    "timestamp": "2026-06-26T18:45:27.755Z",
+    "user": "Priya Nair",
+    "category": "Technical Support",
+    "status": "success",
+    "responseMs": 199
+  },
+  {
+    "id": "q-015",
+    "timestamp": "2026-06-22T18:25:12.187Z",
+    "user": "Sam Okafor",
+    "category": "Product Questions",
+    "status": "success",
+    "responseMs": 313
+  },
+  {
+    "id": "q-003",
+    "timestamp": "2026-06-21T16:02:38.733Z",
+    "user": "Aisha Rahman",
+    "category": "Other",
+    "status": "success",
+    "responseMs": 366
+  },
+  {
+    "id": "q-014",
+    "timestamp": "2026-06-20T02:22:13.277Z",
+    "user": "Diego Fernandez",
+    "category": "Other",
+    "status": "success",
+    "responseMs": 482
+  },
+  {
+    "id": "q-004",
+    "timestamp": "2026-06-19T04:55:50.996Z",
+    "user": "Jordan Blake",
+    "category": "Technical Support",
+    "status": "success",
+    "responseMs": 160
+  },
+  {
+    "id": "q-021",
+    "timestamp": "2026-06-18T22:31:33.121Z",
+    "user": "Elena Torres",
+    "category": "Billing",
+    "status": "success",
+    "responseMs": 128
+  },
+  {
+    "id": "q-028",
+    "timestamp": "2026-06-18T07:00:33.766Z",
+    "user": "Aisha Rahman",
+    "category": "Product Questions",
+    "status": "success",
+    "responseMs": 342
+  },
+  {
+    "id": "q-020",
+    "timestamp": "2026-06-16T16:09:15.648Z",
+    "user": "Aisha Rahman",
+    "category": "Technical Support",
+    "status": "error",
+    "responseMs": 656
+  },
+  {
+    "id": "q-012",
+    "timestamp": "2026-06-15T22:30:30.720Z",
+    "user": "Marcus Webb",
+    "category": "Product Questions",
+    "status": "success",
+    "responseMs": 204
+  },
+  {
+    "id": "q-006",
+    "timestamp": "2026-06-15T07:47:38.273Z",
+    "user": "Marcus Webb",
+    "category": "Technical Support",
+    "status": "success",
+    "responseMs": 258
+  },
+  {
+    "id": "q-019",
+    "timestamp": "2026-06-13T06:26:56.461Z",
+    "user": "Sam Okafor",
+    "category": "Security & Compliance",
+    "status": "success",
+    "responseMs": 500
+  },
+  {
+    "id": "q-037",
+    "timestamp": "2026-06-12T13:10:18.778Z",
+    "user": "Marcus Webb",
+    "category": "Other",
+    "status": "success",
+    "responseMs": 207
+  },
+  {
+    "id": "q-036",
+    "timestamp": "2026-06-11T22:44:59.134Z",
+    "user": "Aisha Rahman",
+    "category": "Product Questions",
+    "status": "success",
+    "responseMs": 227
+  },
+  {
+    "id": "q-013",
+    "timestamp": "2026-06-09T17:23:19.936Z",
+    "user": "Marcus Webb",
+    "category": "Other",
+    "status": "success",
+    "responseMs": 311
+  },
+  {
+    "id": "q-027",
+    "timestamp": "2026-06-06T16:24:07.416Z",
+    "user": "Diego Fernandez",
+    "category": "Technical Support",
+    "status": "success",
+    "responseMs": 447
+  },
+  {
+    "id": "q-017",
+    "timestamp": "2026-06-05T04:39:35.264Z",
+    "user": "Sam Okafor",
+    "category": "Onboarding",
+    "status": "success",
+    "responseMs": 450
+  },
+  {
+    "id": "q-007",
+    "timestamp": "2026-06-02T20:00:42.155Z",
+    "user": "Jordan Blake",
+    "category": "Security & Compliance",
+    "status": "success",
+    "responseMs": 220
+  },
+  {
+    "id": "q-011",
+    "timestamp": "2026-06-02T14:55:59.479Z",
+    "user": "Jordan Blake",
+    "category": "Billing",
+    "status": "success",
+    "responseMs": 447
+  },
+  {
+    "id": "q-030",
+    "timestamp": "2026-06-01T18:14:40.383Z",
+    "user": "Elena Torres",
+    "category": "Security & Compliance",
+    "status": "success",
+    "responseMs": 202
+  },
+  {
+    "id": "q-033",
+    "timestamp": "2026-06-01T16:17:38.541Z",
+    "user": "Jordan Blake",
+    "category": "Product Questions",
+    "status": "success",
+    "responseMs": 200
+  }
+]

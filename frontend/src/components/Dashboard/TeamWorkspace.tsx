@@ -36,7 +36,7 @@ export function TeamWorkspace() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Team Workspace</CardTitle>
+        <CardTitle level="h2">Team Workspace</CardTitle>
         <CardDescription>Who&apos;s active right now</CardDescription>
       </CardHeader>
       <CardContent>

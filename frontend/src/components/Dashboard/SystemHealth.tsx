@@ -20,7 +20,7 @@ export function SystemHealth() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>System Health</CardTitle>
+        <CardTitle level="h2">System Health</CardTitle>
         <CardDescription>Current resource utilization</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">

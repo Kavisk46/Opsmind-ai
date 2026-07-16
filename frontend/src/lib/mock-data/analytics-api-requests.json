@@ -1,0 +1,302 @@
+[
+  {
+    "date": "2026-05-16",
+    "success": 992,
+    "error": 29
+  },
+  {
+    "date": "2026-05-17",
+    "success": 1086,
+    "error": 18
+  },
+  {
+    "date": "2026-05-18",
+    "success": 1556,
+    "error": 47
+  },
+  {
+    "date": "2026-05-19",
+    "success": 1597,
+    "error": 34
+  },
+  {
+    "date": "2026-05-20",
+    "success": 1659,
+    "error": 55
+  },
+  {
+    "date": "2026-05-21",
+    "success": 1597,
+    "error": 54
+  },
+  {
+    "date": "2026-05-22",
+    "success": 1660,
+    "error": 30
+  },
+  {
+    "date": "2026-05-23",
+    "success": 1055,
+    "error": 26
+  },
+  {
+    "date": "2026-05-24",
+    "success": 986,
+    "error": 25
+  },
+  {
+    "date": "2026-05-25",
+    "success": 1660,
+    "error": 37
+  },
+  {
+    "date": "2026-05-26",
+    "success": 1703,
+    "error": 38
+  },
+  {
+    "date": "2026-05-27",
+    "success": 1672,
+    "error": 41
+  },
+  {
+    "date": "2026-05-28",
+    "success": 1588,
+    "error": 27
+  },
+  {
+    "date": "2026-05-29",
+    "success": 1608,
+    "error": 43
+  },
+  {
+    "date": "2026-05-30",
+    "success": 1054,
+    "error": 21
+  },
+  {
+    "date": "2026-05-31",
+    "success": 1066,
+    "error": 29
+  },
+  {
+    "date": "2026-06-01",
+    "success": 1753,
+    "error": 45
+  },
+  {
+    "date": "2026-06-02",
+    "success": 1670,
+    "error": 50
+  },
+  {
+    "date": "2026-06-03",
+    "success": 1756,
+    "error": 58
+  },
+  {
+    "date": "2026-06-04",
+    "success": 1650,
+    "error": 40
+  },
+  {
+    "date": "2026-06-05",
+    "success": 1743,
+    "error": 47
+  },
+  {
+    "date": "2026-06-06",
+    "success": 1102,
+    "error": 33
+  },
+  {
+    "date": "2026-06-07",
+    "success": 1093,
+    "error": 17
+  },
+  {
+    "date": "2026-06-08",
+    "success": 1683,
+    "error": 33
+  },
+  {
+    "date": "2026-06-09",
+    "success": 1830,
+    "error": 61
+  },
+  {
+    "date": "2026-06-10",
+    "success": 1708,
+    "error": 49
+  },
+  {
+    "date": "2026-06-11",
+    "success": 1761,
+    "error": 59
+  },
+  {
+    "date": "2026-06-12",
+    "success": 1790,
+    "error": 48
+  },
+  {
+    "date": "2026-06-13",
+    "success": 1124,
+    "error": 17
+  },
+  {
+    "date": "2026-06-14",
+    "success": 1222,
+    "error": 30
+  },
+  {
+    "date": "2026-06-15",
+    "success": 1800,
+    "error": 50
+  },
+  {
+    "date": "2026-06-16",
+    "success": 1851,
+    "error": 54
+  },
+  {
+    "date": "2026-06-17",
+    "success": 1882,
+    "error": 60
+  },
+  {
+    "date": "2026-06-18",
+    "success": 1808,
+    "error": 46
+  },
+  {
+    "date": "2026-06-19",
+    "success": 1909,
+    "error": 61
+  },
+  {
+    "date": "2026-06-20",
+    "success": 1159,
+    "error": 28
+  },
+  {
+    "date": "2026-06-21",
+    "success": 1195,
+    "error": 28
+  },
+  {
+    "date": "2026-06-22",
+    "success": 1856,
+    "error": 60
+  },
+  {
+    "date": "2026-06-23",
+    "success": 1895,
+    "error": 64
+  },
+  {
+    "date": "2026-06-24",
+    "success": 1953,
+    "error": 68
+  },
+  {
+    "date": "2026-06-25",
+    "success": 1903,
+    "error": 44
+  },
+  {
+    "date": "2026-06-26",
+    "success": 1966,
+    "error": 30
+  },
+  {
+    "date": "2026-06-27",
+    "success": 1230,
+    "error": 37
+  },
+  {
+    "date": "2026-06-28",
+    "success": 1304,
+    "error": 21
+  },
+  {
+    "date": "2026-06-29",
+    "success": 1918,
+    "error": 50
+  },
+  {
+    "date": "2026-06-30",
+    "success": 1995,
+    "error": 59
+  },
+  {
+    "date": "2026-07-01",
+    "success": 1980,
+    "error": 40
+  },
+  {
+    "date": "2026-07-02",
+    "success": 2027,
+    "error": 40
+  },
+  {
+    "date": "2026-07-03",
+    "success": 2051,
+    "error": 58
+  },
+  {
+    "date": "2026-07-04",
+    "success": 1316,
+    "error": 44
+  },
+  {
+    "date": "2026-07-05",
+    "success": 1315,
+    "error": 36
+  },
+  {
+    "date": "2026-07-06",
+    "success": 2051,
+    "error": 66
+  },
+  {
+    "date": "2026-07-07",
+    "success": 2083,
+    "error": 37
+  },
+  {
+    "date": "2026-07-08",
+    "success": 1992,
+    "error": 59
+  },
+  {
+    "date": "2026-07-09",
+    "success": 1965,
+    "error": 51
+  },
+  {
+    "date": "2026-07-10",
+    "success": 2045,
+    "error": 53
+  },
+  {
+    "date": "2026-07-11",
+    "success": 1277,
+    "error": 26
+  },
+  {
+    "date": "2026-07-12",
+    "success": 1363,
+    "error": 35
+  },
+  {
+    "date": "2026-07-13",
+    "success": 2049,
+    "error": 35
+  },
+  {
+    "date": "2026-07-14",
+    "success": 2154,
+    "error": 36
+  }
+]

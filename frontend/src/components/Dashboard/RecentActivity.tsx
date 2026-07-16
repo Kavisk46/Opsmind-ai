@@ -33,7 +33,7 @@ export function RecentActivity() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Recent Activity</CardTitle>
+        <CardTitle level="h2">Recent Activity</CardTitle>
         <CardDescription>Latest updates across your workspace</CardDescription>
       </CardHeader>
       <CardContent>

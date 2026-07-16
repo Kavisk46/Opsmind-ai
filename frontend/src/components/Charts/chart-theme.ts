@@ -18,4 +18,5 @@ export const CHART_COLORS = {
   info: "var(--color-info)",
   success: "var(--color-success)",
   warning: "var(--color-warning)",
+  destructive: "var(--color-destructive)",
 };

@@ -1,0 +1,23 @@
+[
+  {
+    "id": "sess_1",
+    "device": "Chrome on macOS",
+    "location": "San Francisco, CA",
+    "lastActiveAt": "2026-07-14T12:00:00Z",
+    "isCurrent": true
+  },
+  {
+    "id": "sess_2",
+    "device": "Safari on iPhone",
+    "location": "San Francisco, CA",
+    "lastActiveAt": "2026-07-13T21:40:00Z",
+    "isCurrent": false
+  },
+  {
+    "id": "sess_3",
+    "device": "Chrome on Windows",
+    "location": "Austin, TX",
+    "lastActiveAt": "2026-07-09T16:15:00Z",
+    "isCurrent": false
+  }
+]

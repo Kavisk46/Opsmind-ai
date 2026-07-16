@@ -23,6 +23,7 @@ export function UserProfileDropdown() {
   const handleLogout = async () => {
     await logout();
     close();
+    triggerRef.current?.focus();
     toast("Signed out.");
   };
 

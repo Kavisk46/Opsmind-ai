@@ -12,6 +12,8 @@ import { cn } from "@/lib/utils";
 
 interface ChartCardProps {
   title: string;
+  /** Forwarded to CardTitle — see its own doc comment. Defaults to h3. */
+  titleLevel?: "h1" | "h2" | "h3" | "h4" | "h5" | "h6";
   description?: string;
   headerExtra?: ReactNode;
   className?: string;
@@ -23,6 +25,7 @@ interface ChartCardProps {
 
 export function ChartCard({
   title,
+  titleLevel,
   description,
   headerExtra,
   className,
@@ -35,7 +38,7 @@ export function ChartCard({
         className={cn(headerExtra && "flex-row items-start justify-between")}
       >
         <div>
-          <CardTitle>{title}</CardTitle>
+          <CardTitle level={titleLevel}>{title}</CardTitle>
           {description && <CardDescription>{description}</CardDescription>}
         </div>
         {headerExtra}

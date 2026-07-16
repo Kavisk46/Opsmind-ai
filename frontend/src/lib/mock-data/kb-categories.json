@@ -1,0 +1,7 @@
+[
+  { "id": "cat-product", "name": "Product" },
+  { "id": "cat-engineering", "name": "Engineering" },
+  { "id": "cat-support", "name": "Support" },
+  { "id": "cat-hr", "name": "HR & People" },
+  { "id": "cat-security", "name": "Security & Compliance" }
+]

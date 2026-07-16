@@ -1,0 +1,15 @@
+[
+  { "id": "f-product", "name": "Product", "parentId": null },
+  { "id": "f-product-specs", "name": "Specs", "parentId": "f-product" },
+  { "id": "f-product-research", "name": "User Research", "parentId": "f-product" },
+  { "id": "f-engineering", "name": "Engineering", "parentId": null },
+  { "id": "f-engineering-architecture", "name": "Architecture", "parentId": "f-engineering" },
+  { "id": "f-engineering-runbooks", "name": "Runbooks", "parentId": "f-engineering" },
+  { "id": "f-engineering-runbooks-oncall", "name": "On-call", "parentId": "f-engineering-runbooks" },
+  { "id": "f-support", "name": "Support", "parentId": null },
+  { "id": "f-support-macros", "name": "Macros", "parentId": "f-support" },
+  { "id": "f-support-faq", "name": "FAQs", "parentId": "f-support" },
+  { "id": "f-people", "name": "People & HR", "parentId": null },
+  { "id": "f-people-onboarding", "name": "Onboarding", "parentId": "f-people" },
+  { "id": "f-security", "name": "Security & Compliance", "parentId": null }
+]

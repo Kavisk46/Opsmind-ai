@@ -1,8 +1,9 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 
-import { AppShell } from "@/components/Layout";
 import { AppProviders } from "@/components/Providers";
+import { getEnvVar, isProd } from "@/lib/env";
+import { logger } from "@/lib/logger";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -15,7 +16,18 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+// Same reasoning as lib/api/index.ts: the localhost fallback is only safe
+// for local development — a production build with this unset should log
+// loudly rather than silently baking an unusable metadataBase into OG tags.
+const appUrl = getEnvVar("NEXT_PUBLIC_APP_URL", "http://localhost:3000");
+
+if (isProd && !process.env.NEXT_PUBLIC_APP_URL) {
+  logger.error(
+    "NEXT_PUBLIC_APP_URL is not set — this production build will use " +
+      "http://localhost:3000, which will produce incorrect OG/canonical URLs."
+  );
+}
+
 const description =
   "OpsMind AI is an enterprise knowledge intelligence platform that unifies your team's data, docs, and workflows into a single AI-powered workspace.";
 
@@ -64,9 +76,7 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        <AppProviders>
-          <AppShell>{children}</AppShell>
-        </AppProviders>
+        <AppProviders>{children}</AppProviders>
       </body>
     </html>
   );

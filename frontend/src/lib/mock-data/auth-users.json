@@ -1,0 +1,29 @@
+[
+  {
+    "id": "user_ava",
+    "name": "Ava Thompson",
+    "email": "ava@opsmind.ai",
+    "password": "Password123!",
+    "avatarUrl": null,
+    "isEmailVerified": true,
+    "requiresOtp": false
+  },
+  {
+    "id": "user_noah",
+    "name": "Noah Bennett",
+    "email": "noah@opsmind.ai",
+    "password": "Password123!",
+    "avatarUrl": null,
+    "isEmailVerified": false,
+    "requiresOtp": false
+  },
+  {
+    "id": "user_priya",
+    "name": "Priya Sharma",
+    "email": "priya@opsmind.ai",
+    "password": "Password123!",
+    "avatarUrl": null,
+    "isEmailVerified": true,
+    "requiresOtp": true
+  }
+]

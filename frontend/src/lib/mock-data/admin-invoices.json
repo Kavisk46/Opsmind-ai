@@ -1,0 +1,6 @@
+[
+  { "id": "inv_1042", "date": "2026-06-14", "amount": "$49.00", "status": "paid" },
+  { "id": "inv_1013", "date": "2026-05-14", "amount": "$49.00", "status": "paid" },
+  { "id": "inv_0988", "date": "2026-04-14", "amount": "$49.00", "status": "paid" },
+  { "id": "inv_0961", "date": "2026-03-14", "amount": "$49.00", "status": "failed" }
+]

@@ -1,0 +1,26 @@
+[
+  {
+    "id": "key_1",
+    "name": "Production backend",
+    "keyPreview": "sk_live_••••••••4f2a",
+    "createdAt": "2026-04-02T10:00:00Z",
+    "lastUsedAt": "2026-07-13T08:22:00Z",
+    "status": "active"
+  },
+  {
+    "id": "key_2",
+    "name": "CI/CD pipeline",
+    "keyPreview": "sk_live_••••••••9c1d",
+    "createdAt": "2026-05-18T14:30:00Z",
+    "lastUsedAt": "2026-07-10T02:11:00Z",
+    "status": "active"
+  },
+  {
+    "id": "key_3",
+    "name": "Legacy integration",
+    "keyPreview": "sk_live_••••••••7b3e",
+    "createdAt": "2026-01-09T09:00:00Z",
+    "lastUsedAt": "2026-03-01T00:00:00Z",
+    "status": "revoked"
+  }
+]
