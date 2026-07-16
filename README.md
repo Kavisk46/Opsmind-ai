@@ -210,7 +210,7 @@ Types are colocated with the feature that owns them (e.g. `components/Chat/types
 
 ### Dashboard
 
-TODO: Add Screenshot
+![Dashboard] (docs/images/c:\Users\skkav\Pictures\Screenshots\dashboard.png.png)
 
 ### AI Assistant
 
