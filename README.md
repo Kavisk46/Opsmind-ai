@@ -210,27 +210,19 @@ Types are colocated with the feature that owns them (e.g. `components/Chat/types
 
 ### Dashboard
 
-![Dashboard] (docs/images/c:\Users\skkav\Pictures\Screenshots\dashboard.png.png)
+![Dashboard](docs/images/dashboard.png)
 
 ### AI Assistant
 
-TODO: Add Screenshot
-
-### Knowledge Base
-
-TODO: Add Screenshot
+![Assistant](docs/images/assistant.png)
 
 ### Analytics
-
-TODO: Add Screenshot
+![Analytics](docs/images/analytics.png)
 
 ### Settings
 
-TODO: Add Screenshot
+![Settings](docs/images/settings.png)
 
-### Dark Mode
-
-TODO: Add Screenshot
 
 ---
 
