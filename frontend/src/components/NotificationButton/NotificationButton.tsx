@@ -13,7 +13,7 @@ import { ActivityList, ActivityListItem } from "@/components/ActivityList";
 import type { BadgeProps } from "@/components/ui/badge";
 import { useDisclosure } from "@/hooks/use-disclosure";
 import notificationsData from "@/lib/mock-data/notifications.json";
-import { cn, POPOVER_PANEL_CLASS } from "@/lib/utils";
+import { FOCUS_RING_CLASS, cn, POPOVER_PANEL_CLASS } from "@/lib/utils";
 
 type NotificationStatus = "info" | "success" | "warning";
 
@@ -64,7 +64,10 @@ export function NotificationButton() {
         aria-label={
           hasBadge ? `Notifications, ${unreadCount} unread` : "Notifications"
         }
-        className="relative inline-flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className={cn(
+          "relative inline-flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground",
+          FOCUS_RING_CLASS
+        )}
       >
         <Bell className="h-5 w-5" aria-hidden="true" />
         {hasBadge && (

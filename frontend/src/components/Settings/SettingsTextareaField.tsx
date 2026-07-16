@@ -3,7 +3,7 @@
 import type { TextareaHTMLAttributes } from "react";
 import { useFormContext } from "react-hook-form";
 
-import { cn } from "@/lib/utils";
+import { cn, FOCUS_RING_CLASS } from "@/lib/utils";
 
 interface SettingsTextareaFieldProps
   extends Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, "name"> {
@@ -51,7 +51,8 @@ export function SettingsTextareaField({
         aria-invalid={error ? true : undefined}
         aria-describedby={describedBy}
         className={cn(
-          "w-full resize-none rounded-md border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+          "w-full resize-none rounded-md border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground",
+          FOCUS_RING_CLASS,
           error ? "border-destructive" : "border-border",
           className
         )}

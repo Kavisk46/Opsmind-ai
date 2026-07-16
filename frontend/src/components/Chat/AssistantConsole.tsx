@@ -4,6 +4,7 @@ import { MessageSquare } from "lucide-react";
 import { useState } from "react";
 
 import conversationsData from "@/lib/mock-data/conversations.json";
+import { FOCUS_RING_CLASS, cn } from "@/lib/utils";
 
 import { ChatWindow } from "./ChatWindow";
 import { ConversationList } from "./ConversationList";
@@ -54,7 +55,10 @@ export function AssistantConsole() {
         onClick={() => setIsListOpen(true)}
         aria-haspopup="dialog"
         aria-expanded={isListOpen}
-        className="flex items-center gap-2 rounded-lg border border-border bg-card p-3 text-left focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none lg:hidden"
+        className={cn(
+          "flex items-center gap-2 rounded-lg border border-border bg-card p-3 text-left lg:hidden",
+          FOCUS_RING_CLASS
+        )}
       >
         <MessageSquare
           className="h-4 w-4 shrink-0 text-muted-foreground"

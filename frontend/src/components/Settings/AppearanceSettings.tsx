@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/card";
 import { useSimulatedLoad } from "@/hooks/use-simulated-load";
 import appearanceData from "@/lib/mock-data/settings-appearance.json";
-import { cn } from "@/lib/utils";
+import { FOCUS_RING_CLASS, cn } from "@/lib/utils";
 
 import { SettingsFormActions } from "./SettingsFormActions";
 import { SettingsPageSkeleton } from "./SettingsPageSkeleton";
@@ -92,7 +92,8 @@ export function AppearanceSettings() {
                     aria-checked={isActive}
                     onClick={() => setTheme(option.value)}
                     className={cn(
-                      "flex items-center gap-2.5 rounded-md border px-3 py-2.5 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                      "flex items-center gap-2.5 rounded-md border px-3 py-2.5 text-left text-sm transition-colors",
+                      FOCUS_RING_CLASS,
                       isActive
                         ? "border-primary bg-accent text-accent-foreground"
                         : "border-border hover:bg-accent/50"
@@ -135,7 +136,8 @@ export function AppearanceSettings() {
                     aria-checked={isActive}
                     onClick={() => setDensity(option.value)}
                     className={cn(
-                      "flex flex-col gap-1 rounded-md border px-3 py-2.5 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                      "flex flex-col gap-1 rounded-md border px-3 py-2.5 text-left text-sm transition-colors",
+                      FOCUS_RING_CLASS,
                       isActive
                         ? "border-primary bg-accent text-accent-foreground"
                         : "border-border hover:bg-accent/50"

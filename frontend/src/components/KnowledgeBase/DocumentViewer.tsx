@@ -4,6 +4,7 @@ import { X } from "lucide-react";
 import { useEffect, useRef } from "react";
 
 import { MarkdownRenderer } from "@/components/Markdown";
+import { FOCUS_RING_CLASS, cn } from "@/lib/utils";
 import { useModalStore } from "@/store/modal-store";
 
 import { DocumentMeta } from "./DocumentMeta";
@@ -71,7 +72,7 @@ export function DocumentViewer({ documents }: DocumentViewerProps) {
         role="dialog"
         aria-modal="true"
         aria-label={activeDocument.title}
-        className="fixed inset-4 z-(--z-modal) flex flex-col overflow-hidden rounded-lg border border-border bg-card shadow-modal animate-scale-in motion-reduce:animate-none sm:inset-x-8 sm:inset-y-10 lg:inset-x-24 lg:inset-y-12"
+        className="fixed inset-4 z-(--z-modal) mx-auto flex max-w-[1600px] flex-col overflow-hidden rounded-lg border border-border bg-card shadow-modal animate-scale-in motion-reduce:animate-none sm:inset-x-8 sm:inset-y-10 lg:inset-x-24 lg:inset-y-12"
       >
         <div className="flex items-start justify-between gap-4 border-b border-border p-4">
           <div className="min-w-0">
@@ -85,7 +86,10 @@ export function DocumentViewer({ documents }: DocumentViewerProps) {
             type="button"
             onClick={closeModal}
             aria-label="Close document"
-            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className={cn(
+              "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground",
+              FOCUS_RING_CLASS
+            )}
           >
             <X className="h-4 w-4" aria-hidden="true" />
           </button>

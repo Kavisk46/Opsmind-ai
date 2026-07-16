@@ -29,7 +29,7 @@ export function Progress({ value, label, className }: ProgressProps) {
     >
       <div
         className={cn(
-          "h-full rounded-full transition-[width] duration-300 motion-reduce:transition-none",
+          "h-full rounded-full transition-[width] duration-(--duration-slow) motion-reduce:transition-none",
           fillClass
         )}
         style={{ width: `${clamped}%` }}

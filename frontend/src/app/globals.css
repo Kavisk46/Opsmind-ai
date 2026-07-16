@@ -53,6 +53,14 @@
   --z-popover: 1500;
   --z-tooltip: 1600;
   --z-toast: 1700;
+
+  /* Motion duration scale — no Tailwind v4 theme namespace exists for
+     this, so it lives here as plain custom properties (consume via
+     duration-(--duration-base)). Keeps every "open/collapse/change"
+     transition on one of three deliberate speeds instead of ad-hoc values. */
+  --duration-fast: 150ms;
+  --duration-base: 200ms;
+  --duration-slow: 300ms;
 }
 
 .dark {
@@ -141,49 +149,8 @@
   --spacing-section: 4rem;
 
   /* Animation */
-  --animate-fade-in: fade-in 150ms ease-out;
-  --animate-fade-out: fade-out 150ms ease-in;
-  --animate-slide-in-from-top: slide-in-from-top 200ms ease-out;
-  --animate-slide-in-from-bottom: slide-in-from-bottom 200ms ease-out;
-  --animate-scale-in: scale-in 150ms ease-out;
-  --animate-scale-out: scale-out 150ms ease-in;
+  --animate-scale-in: scale-in var(--duration-fast) ease-out;
 
-  @keyframes fade-in {
-    from {
-      opacity: 0;
-    }
-    to {
-      opacity: 1;
-    }
-  }
-  @keyframes fade-out {
-    from {
-      opacity: 1;
-    }
-    to {
-      opacity: 0;
-    }
-  }
-  @keyframes slide-in-from-top {
-    from {
-      transform: translateY(-0.5rem);
-      opacity: 0;
-    }
-    to {
-      transform: translateY(0);
-      opacity: 1;
-    }
-  }
-  @keyframes slide-in-from-bottom {
-    from {
-      transform: translateY(0.5rem);
-      opacity: 0;
-    }
-    to {
-      transform: translateY(0);
-      opacity: 1;
-    }
-  }
   @keyframes scale-in {
     from {
       transform: scale(0.96);
@@ -192,16 +159,6 @@
     to {
       transform: scale(1);
       opacity: 1;
-    }
-  }
-  @keyframes scale-out {
-    from {
-      transform: scale(1);
-      opacity: 1;
-    }
-    to {
-      transform: scale(0.96);
-      opacity: 0;
     }
   }
 }

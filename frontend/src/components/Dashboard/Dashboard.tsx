@@ -1,7 +1,12 @@
+"use client";
+
 import dynamic from "next/dynamic";
+
+import { useSimulatedLoad } from "@/hooks/use-simulated-load";
 
 import { AIInsights } from "./AIInsights";
 import { AnalyticsCharts } from "./AnalyticsCharts";
+import { DashboardSkeleton } from "./DashboardSkeleton";
 import { HeroSection } from "./HeroSection";
 import { QuickActions } from "./QuickActions";
 import { RecentActivity } from "./RecentActivity";
@@ -17,6 +22,12 @@ const AIStatus = dynamic(() =>
 );
 
 export function Dashboard() {
+  const isLoading = useSimulatedLoad();
+
+  if (isLoading) {
+    return <DashboardSkeleton />;
+  }
+
   return (
     <div className="space-y-6">
       <HeroSection />

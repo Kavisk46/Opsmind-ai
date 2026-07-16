@@ -4,7 +4,12 @@ import { Check, ChevronDown, type LucideIcon } from "lucide-react";
 import { useId } from "react";
 
 import { useDisclosure } from "@/hooks/use-disclosure";
-import { cn, POPOVER_PANEL_CLASS } from "@/lib/utils";
+import {
+  FOCUS_RING_CLASS,
+  POPOVER_ITEM_CLASS,
+  POPOVER_PANEL_CLASS,
+  cn,
+} from "@/lib/utils";
 
 export interface SelectFilterOption {
   value: string;
@@ -53,7 +58,10 @@ export function SelectFilter({
         onClick={toggle}
         aria-expanded={isOpen}
         aria-controls={panelId}
-        className="inline-flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className={cn(
+          "inline-flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent",
+          FOCUS_RING_CLASS
+        )}
       >
         <Icon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
         {selectedLabel}
@@ -78,7 +86,8 @@ export function SelectFilter({
             aria-current={value === null ? "true" : undefined}
             onClick={() => select(null)}
             className={cn(
-              "flex w-full items-center justify-between rounded-md px-2.5 py-2 text-left text-sm hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              POPOVER_ITEM_CLASS,
+              FOCUS_RING_CLASS,
               value === null && "font-medium text-foreground"
             )}
           >
@@ -94,7 +103,8 @@ export function SelectFilter({
               aria-current={value === option.value ? "true" : undefined}
               onClick={() => select(option.value)}
               className={cn(
-                "flex w-full items-center justify-between rounded-md px-2.5 py-2 text-left text-sm hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                POPOVER_ITEM_CLASS,
+                FOCUS_RING_CLASS,
                 value === option.value && "font-medium text-foreground"
               )}
             >

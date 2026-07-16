@@ -4,7 +4,12 @@ import { ArrowUpDown, Check } from "lucide-react";
 import { useId } from "react";
 
 import { useDisclosure } from "@/hooks/use-disclosure";
-import { cn, POPOVER_PANEL_CLASS } from "@/lib/utils";
+import {
+  FOCUS_RING_CLASS,
+  POPOVER_ITEM_CLASS,
+  POPOVER_PANEL_CLASS,
+  cn,
+} from "@/lib/utils";
 
 import { SORT_OPTIONS } from "./document-filters";
 import type { SortOption } from "./types";
@@ -35,7 +40,10 @@ export function SortSelect({ value, onChange }: SortSelectProps) {
         onClick={toggle}
         aria-expanded={isOpen}
         aria-controls={panelId}
-        className="inline-flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className={cn(
+          "inline-flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent",
+          FOCUS_RING_CLASS
+        )}
       >
         <ArrowUpDown
           className="h-4 w-4 text-muted-foreground"
@@ -58,7 +66,8 @@ export function SortSelect({ value, onChange }: SortSelectProps) {
               aria-current={value === option.value ? "true" : undefined}
               onClick={() => select(option.value)}
               className={cn(
-                "flex w-full items-center justify-between rounded-md px-2.5 py-2 text-left text-sm hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                POPOVER_ITEM_CLASS,
+                FOCUS_RING_CLASS,
                 value === option.value && "font-medium text-foreground"
               )}
             >

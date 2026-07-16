@@ -12,6 +12,7 @@ import {
   removeLocalStorageItem,
   setLocalStorageItem,
 } from "@/lib/storage";
+import { FOCUS_RING_CLASS, cn } from "@/lib/utils";
 
 import { loginSchema, type LoginFormValues } from "./auth-schemas";
 import { AuthCard } from "./AuthCard";
@@ -105,7 +106,10 @@ export function LoginForm() {
               <input
                 type="checkbox"
                 {...form.register("rememberMe")}
-                className="h-4 w-4 rounded border-border text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className={cn(
+                  "h-4 w-4 rounded border-border text-primary",
+                  FOCUS_RING_CLASS
+                )}
               />
               Remember me
             </label>

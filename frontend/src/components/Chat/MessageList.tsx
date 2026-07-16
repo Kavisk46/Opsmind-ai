@@ -3,6 +3,8 @@
 import { ArrowDown, Sparkles } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
+import { FOCUS_RING_CLASS, cn } from "@/lib/utils";
+
 import { MessageBubble } from "./MessageBubble";
 import type { Message } from "./types";
 import { TypingIndicator } from "./TypingIndicator";
@@ -106,7 +108,10 @@ export function MessageList({
         aria-live="polite"
         aria-label="Conversation"
         tabIndex={0}
-        className="h-full overflow-y-auto p-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+        className={cn(
+          "h-full overflow-y-auto p-4 focus-visible:ring-inset",
+          FOCUS_RING_CLASS
+        )}
       >
         {messages.length === 0 && !isLoading ? (
           <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
@@ -161,7 +166,10 @@ export function MessageList({
           type="button"
           onClick={jumpToBottom}
           aria-label="Scroll to latest messages"
-          className="absolute bottom-4 left-1/2 inline-flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-medium text-foreground shadow-popover transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          className={cn(
+            "absolute bottom-4 left-1/2 inline-flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-medium text-foreground shadow-popover transition-colors hover:bg-accent",
+            FOCUS_RING_CLASS
+          )}
         >
           <ArrowDown className="h-3.5 w-3.5" aria-hidden="true" />
           New messages

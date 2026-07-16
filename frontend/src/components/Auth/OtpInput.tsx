@@ -7,6 +7,8 @@ import {
   type KeyboardEvent,
 } from "react";
 
+import { FOCUS_RING_CLASS, cn } from "@/lib/utils";
+
 interface OtpInputProps {
   id?: string;
   length?: number;
@@ -99,7 +101,10 @@ export function OtpInput({
           onKeyDown={handleKeyDown(index)}
           onPaste={handlePaste}
           aria-label={`Digit ${index + 1} of ${length}`}
-          className="h-12 w-full min-w-0 rounded-md border border-border bg-background text-center text-lg font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className={cn(
+            "h-12 w-full min-w-0 rounded-md border border-border bg-background text-center text-lg font-medium text-foreground",
+            FOCUS_RING_CLASS
+          )}
         />
       ))}
     </div>

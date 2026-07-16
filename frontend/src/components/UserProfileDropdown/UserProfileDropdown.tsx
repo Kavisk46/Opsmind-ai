@@ -9,7 +9,7 @@ import { footerNavItem } from "@/components/Sidebar/nav-items";
 import { Avatar } from "@/components/ui/avatar";
 import { useDisclosure } from "@/hooks/use-disclosure";
 import { toast } from "@/lib/toast";
-import { cn, POPOVER_PANEL_CLASS } from "@/lib/utils";
+import { FOCUS_RING_CLASS, cn, POPOVER_PANEL_CLASS } from "@/lib/utils";
 
 export function UserProfileDropdown() {
   const { user, status, logout } = useAuth();
@@ -36,7 +36,10 @@ export function UserProfileDropdown() {
         aria-expanded={isOpen}
         aria-controls={panelId}
         aria-label={`Account menu for ${name}`}
-        className="flex items-center gap-2 rounded-md px-1.5 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className={cn(
+          "flex items-center gap-2 rounded-md px-1.5 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-accent",
+          FOCUS_RING_CLASS
+        )}
       >
         <Avatar name={isAuthenticated ? user.name : undefined} />
         <span className="hidden sm:inline">{name}</span>
@@ -67,7 +70,10 @@ export function UserProfileDropdown() {
           <Link
             href={footerNavItem.href}
             onClick={close}
-            className="flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className={cn(
+              "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm text-foreground transition-colors hover:bg-accent",
+              FOCUS_RING_CLASS
+            )}
           >
             <Settings
               className="h-4 w-4 text-muted-foreground"
@@ -79,7 +85,10 @@ export function UserProfileDropdown() {
           <button
             type="button"
             onClick={handleLogout}
-            className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm text-destructive transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className={cn(
+              "flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm text-destructive transition-colors hover:bg-accent",
+              FOCUS_RING_CLASS
+            )}
           >
             <LogOut className="h-4 w-4" aria-hidden="true" />
             Log out

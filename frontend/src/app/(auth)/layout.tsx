@@ -3,6 +3,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { RouteAnnouncer } from "@/components/Layout";
+import { FOCUS_RING_CLASS, cn } from "@/lib/utils";
 
 interface AuthLayoutProps {
   children: ReactNode;
@@ -23,7 +24,10 @@ export default function AuthLayout({ children }: AuthLayoutProps) {
       <header className="flex items-center justify-center py-8">
         <Link
           href="/"
-          className="flex items-center gap-2 rounded-md text-lg font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className={cn(
+            "flex items-center gap-2 rounded-md text-lg font-semibold text-foreground",
+            FOCUS_RING_CLASS
+          )}
         >
           <Sparkles className="h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
           OpsMind AI

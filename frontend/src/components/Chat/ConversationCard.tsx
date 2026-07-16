@@ -1,7 +1,7 @@
 import { Pin } from "lucide-react";
 
 import { formatRelativeTime } from "@/components/ActivityList";
-import { cn } from "@/lib/utils";
+import { FOCUS_RING_CLASS, cn } from "@/lib/utils";
 
 import type { Conversation } from "./types";
 
@@ -27,7 +27,8 @@ export function ConversationCard({
       onClick={onSelect}
       aria-current={isActive ? "true" : undefined}
       className={cn(
-        "flex w-full flex-col gap-1 rounded-md px-3 py-2.5 text-left transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+        "flex w-full flex-col gap-1 rounded-md px-3 py-2.5 text-left transition-colors",
+        FOCUS_RING_CLASS,
         isActive ? "bg-accent text-accent-foreground" : "hover:bg-accent/50"
       )}
     >

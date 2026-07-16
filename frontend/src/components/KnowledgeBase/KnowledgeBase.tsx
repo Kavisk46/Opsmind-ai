@@ -9,6 +9,7 @@ import categoriesData from "@/lib/mock-data/kb-categories.json";
 import documentsData from "@/lib/mock-data/kb-documents.json";
 import foldersData from "@/lib/mock-data/kb-folders.json";
 import tagsData from "@/lib/mock-data/kb-tags.json";
+import { FOCUS_RING_CLASS, cn } from "@/lib/utils";
 import { useModalStore } from "@/store/modal-store";
 
 import { filterDocuments, sortDocuments } from "./document-filters";
@@ -151,7 +152,10 @@ export function KnowledgeBase() {
           onClick={() => setIsFolderListOpen(true)}
           aria-haspopup="dialog"
           aria-expanded={isFolderListOpen}
-          className="flex items-center gap-2 rounded-lg border border-border bg-card p-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:hidden"
+          className={cn(
+            "flex items-center gap-2 rounded-lg border border-border bg-card p-3 text-left lg:hidden",
+            FOCUS_RING_CLASS
+          )}
         >
           <FolderOpen
             className="h-4 w-4 shrink-0 text-muted-foreground"
@@ -199,7 +203,10 @@ export function KnowledgeBase() {
               <button
                 type="button"
                 onClick={() => setSelectedFolderId(null)}
-                className="rounded hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className={cn(
+                  "rounded transition-colors hover:text-foreground",
+                  FOCUS_RING_CLASS
+                )}
               >
                 All Documents
               </button>
@@ -219,7 +226,10 @@ export function KnowledgeBase() {
                       <button
                         type="button"
                         onClick={() => setSelectedFolderId(folder.id)}
-                        className="rounded hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        className={cn(
+                          "rounded transition-colors hover:text-foreground",
+                          FOCUS_RING_CLASS
+                        )}
                       >
                         {folder.name}
                       </button>

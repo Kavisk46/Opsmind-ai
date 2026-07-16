@@ -4,7 +4,7 @@ import { X } from "lucide-react";
 import { useRef } from "react";
 
 import { useModalDismiss } from "@/hooks/use-modal-dismiss";
-import { cn } from "@/lib/utils";
+import { FOCUS_RING_CLASS, cn } from "@/lib/utils";
 
 import type { SettingsSection } from "./types";
 
@@ -42,7 +42,10 @@ export function SettingsNav({
             type="button"
             onClick={onClose}
             aria-label="Close settings navigation"
-            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className={cn(
+              "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground",
+              FOCUS_RING_CLASS
+            )}
           >
             <X className="h-4 w-4" aria-hidden="true" />
           </button>
@@ -62,7 +65,8 @@ export function SettingsNav({
               onClick={() => onSelectSection(section.id)}
               aria-current={isActive ? "true" : undefined}
               className={cn(
-                "flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                "flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm transition-colors",
+                FOCUS_RING_CLASS,
                 isActive
                   ? "bg-accent text-accent-foreground"
                   : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"

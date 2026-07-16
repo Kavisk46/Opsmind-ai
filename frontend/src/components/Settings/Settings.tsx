@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 
+import { FOCUS_RING_CLASS, cn } from "@/lib/utils";
+
 import { ConfirmDialog } from "./ConfirmDialog";
 import {
   DEFAULT_SETTINGS_SECTION_ID,
@@ -36,7 +38,10 @@ export function Settings() {
         onClick={() => setIsNavOpen(true)}
         aria-haspopup="dialog"
         aria-expanded={isNavOpen}
-        className="flex items-center gap-2 rounded-lg border border-border bg-card p-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:hidden"
+        className={cn(
+          "flex items-center gap-2 rounded-lg border border-border bg-card p-3 text-left lg:hidden",
+          FOCUS_RING_CLASS
+        )}
       >
         <activeSection.icon
           className="h-4 w-4 shrink-0 text-muted-foreground"

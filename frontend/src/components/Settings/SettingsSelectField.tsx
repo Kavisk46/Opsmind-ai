@@ -3,7 +3,7 @@
 import type { SelectHTMLAttributes } from "react";
 import { useFormContext } from "react-hook-form";
 
-import { cn } from "@/lib/utils";
+import { cn, FOCUS_RING_CLASS } from "@/lib/utils";
 
 interface SettingsSelectFieldProps
   extends Omit<SelectHTMLAttributes<HTMLSelectElement>, "name"> {
@@ -51,7 +51,8 @@ export function SettingsSelectField({
         aria-invalid={error ? true : undefined}
         aria-describedby={describedBy}
         className={cn(
-          "w-full rounded-md border bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+          "w-full rounded-md border bg-background px-3 py-2 text-sm text-foreground",
+          FOCUS_RING_CLASS,
           error ? "border-destructive" : "border-border",
           className
         )}

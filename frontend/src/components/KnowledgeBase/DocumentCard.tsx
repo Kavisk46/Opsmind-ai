@@ -3,7 +3,7 @@
 import { Star } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/utils";
+import { FOCUS_RING_CLASS, cn } from "@/lib/utils";
 
 import { DocumentMeta } from "./DocumentMeta";
 import { getFileTypeConfig } from "./file-type";
@@ -36,7 +36,10 @@ export function DocumentCard({
       <button
         type="button"
         onClick={onOpen}
-        className="flex flex-1 flex-col gap-3 rounded-lg p-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className={cn(
+          "flex flex-1 flex-col gap-3 rounded-lg p-4 text-left transition-colors hover:bg-accent/50",
+          FOCUS_RING_CLASS
+        )}
       >
         <div className="flex items-start gap-3 pr-8">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-accent text-accent-foreground">
@@ -77,7 +80,8 @@ export function DocumentCard({
         aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
         aria-pressed={isFavorite}
         className={cn(
-          "absolute top-3 right-3 inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+          "absolute top-3 right-3 inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground",
+          FOCUS_RING_CLASS,
           isFavorite && "text-warning"
         )}
       >

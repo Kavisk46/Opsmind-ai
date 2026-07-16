@@ -2,7 +2,7 @@
 
 import { Clock, FileStack, Star, type LucideIcon } from "lucide-react";
 
-import { cn } from "@/lib/utils";
+import { FOCUS_RING_CLASS, cn } from "@/lib/utils";
 
 import type { ViewMode } from "./types";
 
@@ -52,7 +52,8 @@ export function ViewTabs({
             aria-controls={controls}
             onClick={() => onChange(tab.value)}
             className={cn(
-              "inline-flex items-center gap-1.5 rounded px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              "inline-flex items-center gap-1.5 rounded px-3 py-1.5 text-sm font-medium transition-colors",
+              FOCUS_RING_CLASS,
               isActive
                 ? "bg-accent text-accent-foreground"
                 : "text-muted-foreground hover:text-foreground"

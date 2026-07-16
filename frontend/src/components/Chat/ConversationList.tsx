@@ -5,6 +5,7 @@ import { useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { useModalDismiss } from "@/hooks/use-modal-dismiss";
+import { FOCUS_RING_CLASS, cn } from "@/lib/utils";
 
 import { ConversationCard } from "./ConversationCard";
 import type { Conversation } from "./types";
@@ -65,7 +66,10 @@ export function ConversationList({
             type="button"
             onClick={onClose}
             aria-label="Close conversations"
-            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            className={cn(
+              "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground",
+              FOCUS_RING_CLASS
+            )}
           >
             <X className="h-4 w-4" aria-hidden="true" />
           </button>
@@ -87,7 +91,10 @@ export function ConversationList({
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Search conversations…"
-            className="w-full rounded-md border border-border bg-background py-2 pr-3 pl-8 text-sm text-foreground placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            className={cn(
+              "w-full rounded-md border border-border bg-background py-2 pr-3 pl-8 text-sm text-foreground placeholder:text-muted-foreground",
+              FOCUS_RING_CLASS
+            )}
           />
         </div>
       </div>

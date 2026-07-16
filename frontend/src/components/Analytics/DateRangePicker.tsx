@@ -5,7 +5,12 @@ import { useId, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { useDisclosure } from "@/hooks/use-disclosure";
-import { cn, POPOVER_PANEL_CLASS } from "@/lib/utils";
+import {
+  FOCUS_RING_CLASS,
+  POPOVER_ITEM_CLASS,
+  POPOVER_PANEL_CLASS,
+  cn,
+} from "@/lib/utils";
 
 import { DATE_PRESET_OPTIONS, dateRangeLabel } from "./query-log-utils";
 import type { DateRangeValue } from "./types";
@@ -64,7 +69,10 @@ export function DateRangePicker({ value, onChange }: DateRangePickerProps) {
         onClick={handleTriggerClick}
         aria-expanded={isOpen}
         aria-controls={panelId}
-        className="inline-flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className={cn(
+          "inline-flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent",
+          FOCUS_RING_CLASS
+        )}
       >
         <Calendar
           className="h-4 w-4 text-muted-foreground"
@@ -96,7 +104,8 @@ export function DateRangePicker({ value, onChange }: DateRangePickerProps) {
               }
               onClick={() => selectPreset(option.value)}
               className={cn(
-                "flex w-full items-center justify-between rounded-md px-2.5 py-2 text-left text-sm hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                POPOVER_ITEM_CLASS,
+                FOCUS_RING_CLASS,
                 value.preset === option.value && "font-medium text-foreground"
               )}
             >
@@ -119,7 +128,10 @@ export function DateRangePicker({ value, onChange }: DateRangePickerProps) {
                   value={draftStart}
                   onChange={(event) => setDraftStart(event.target.value)}
                   max={draftEnd || undefined}
-                  className="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className={cn(
+                    "w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-sm text-foreground",
+                    FOCUS_RING_CLASS
+                  )}
                 />
               </div>
               <div>
@@ -135,7 +147,10 @@ export function DateRangePicker({ value, onChange }: DateRangePickerProps) {
                   value={draftEnd}
                   onChange={(event) => setDraftEnd(event.target.value)}
                   min={draftStart || undefined}
-                  className="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className={cn(
+                    "w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-sm text-foreground",
+                    FOCUS_RING_CLASS
+                  )}
                 />
               </div>
               <Button

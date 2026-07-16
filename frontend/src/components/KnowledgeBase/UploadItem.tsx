@@ -1,6 +1,7 @@
 import { AlertCircle, Check, FileText, X } from "lucide-react";
 
 import { Progress } from "@/components/ui/progress";
+import { FOCUS_RING_CLASS, cn } from "@/lib/utils";
 
 export interface UploadEntry {
   id: string;
@@ -40,7 +41,10 @@ export function UploadItem({ entry, onRemove }: UploadItemProps) {
             type="button"
             onClick={() => onRemove(entry.id)}
             aria-label={`Remove ${entry.file.name}`}
-            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className={cn(
+              "inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground",
+              FOCUS_RING_CLASS
+            )}
           >
             <X className="h-3.5 w-3.5" aria-hidden="true" />
           </button>

@@ -10,7 +10,7 @@ import {
 } from "react";
 
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { FOCUS_RING_CLASS, cn } from "@/lib/utils";
 
 const MAX_LENGTH = 4000;
 const MAX_TEXTAREA_HEIGHT_PX = 200;
@@ -88,7 +88,10 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
           rows={1}
           maxLength={MAX_LENGTH}
           placeholder="Ask your AI Assistant anything…"
-          className="max-h-[200px] flex-1 resize-none overflow-y-auto rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+          className={cn(
+            "max-h-[200px] flex-1 resize-none overflow-y-auto rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50",
+            FOCUS_RING_CLASS
+          )}
         />
         <Button
           type="submit"

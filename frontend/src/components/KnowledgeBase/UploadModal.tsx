@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { useModalDismiss } from "@/hooks/use-modal-dismiss";
+import { FOCUS_RING_CLASS, cn } from "@/lib/utils";
 import { useModalStore } from "@/store/modal-store";
 
 import {
@@ -127,7 +128,10 @@ function UploadModalContent() {
             type="button"
             onClick={closeModal}
             aria-label="Close upload dialog"
-            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className={cn(
+              "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground",
+              FOCUS_RING_CLASS
+            )}
           >
             <X className="h-4 w-4" aria-hidden="true" />
           </button>

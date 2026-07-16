@@ -4,7 +4,7 @@ import { Eye, EyeOff } from "lucide-react";
 import { useState, type InputHTMLAttributes } from "react";
 import { useFormContext } from "react-hook-form";
 
-import { cn } from "@/lib/utils";
+import { cn, FOCUS_RING_CLASS } from "@/lib/utils";
 
 interface PasswordFieldProps
   extends Omit<InputHTMLAttributes<HTMLInputElement>, "name" | "type"> {
@@ -56,7 +56,8 @@ export function PasswordField({
           aria-invalid={error ? true : undefined}
           aria-describedby={describedBy}
           className={cn(
-            "w-full rounded-md border bg-background px-3 py-2 pr-10 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            "w-full rounded-md border bg-background px-3 py-2 pr-10 text-sm text-foreground placeholder:text-muted-foreground",
+            FOCUS_RING_CLASS,
             error ? "border-destructive" : "border-border",
             className
           )}
@@ -68,7 +69,10 @@ export function PasswordField({
           onClick={() => setIsVisible((prev) => !prev)}
           aria-label={isVisible ? "Hide password" : "Show password"}
           aria-pressed={isVisible}
-          className="absolute inset-y-0 right-0 flex items-center rounded-md px-3 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className={cn(
+            "absolute inset-y-0 right-0 flex items-center rounded-md px-3 text-muted-foreground transition-colors hover:text-foreground",
+            FOCUS_RING_CLASS
+          )}
         >
           {isVisible ? (
             <EyeOff className="h-4 w-4" aria-hidden="true" />

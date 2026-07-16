@@ -4,7 +4,7 @@ import { ChevronDown, ChevronRight, Folder as FolderIcon, X } from "lucide-react
 import { useMemo, useRef, useState } from "react";
 
 import { useModalDismiss } from "@/hooks/use-modal-dismiss";
-import { cn } from "@/lib/utils";
+import { FOCUS_RING_CLASS, cn } from "@/lib/utils";
 
 import { buildFolderTree, countDocumentsInFolder } from "./folder-tree";
 import type { Document, Folder, FolderNode } from "./types";
@@ -61,7 +61,7 @@ export function FolderTree({
       <li key={node.id}>
         <div
           className={cn(
-            "flex items-center gap-1 rounded-md pr-2",
+            "flex items-center gap-1 rounded-md pr-2 transition-colors",
             isActive ? "bg-accent text-accent-foreground" : "hover:bg-accent/50"
           )}
           style={{ paddingLeft: `${depth * 1}rem` }}
@@ -72,7 +72,10 @@ export function FolderTree({
               onClick={() => toggleExpanded(node.id)}
               aria-label={isExpanded ? `Collapse ${node.name}` : `Expand ${node.name}`}
               aria-expanded={isExpanded}
-              className="flex h-7 w-7 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className={cn(
+                "flex h-7 w-7 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground",
+                FOCUS_RING_CLASS
+              )}
             >
               {isExpanded ? (
                 <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
@@ -87,7 +90,10 @@ export function FolderTree({
             type="button"
             onClick={() => onSelectFolder(node.id)}
             aria-current={isActive ? "true" : undefined}
-            className="flex min-w-0 flex-1 items-center gap-2 truncate rounded-md py-1.5 text-left text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className={cn(
+              "flex min-w-0 flex-1 items-center gap-2 truncate rounded-md py-1.5 text-left text-sm",
+              FOCUS_RING_CLASS
+            )}
           >
             <FolderIcon
               className="h-4 w-4 shrink-0 text-muted-foreground"
@@ -119,7 +125,10 @@ export function FolderTree({
             type="button"
             onClick={onClose}
             aria-label="Close folders"
-            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className={cn(
+              "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground",
+              FOCUS_RING_CLASS
+            )}
           >
             <X className="h-4 w-4" aria-hidden="true" />
           </button>
@@ -132,7 +141,8 @@ export function FolderTree({
           onClick={() => onSelectFolder(null)}
           aria-current={selectedFolderId === null ? "true" : undefined}
           className={cn(
-            "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors",
+            FOCUS_RING_CLASS,
             selectedFolderId === null
               ? "bg-accent text-accent-foreground"
               : "hover:bg-accent/50"

@@ -20,6 +20,7 @@ import {
 } from "react-syntax-highlighter/dist/esm/styles/prism";
 
 import { useCopyToClipboard } from "@/hooks/use-copy-to-clipboard";
+import { FOCUS_RING_CLASS, cn } from "@/lib/utils";
 
 // A curated set rather than the full ~200-language `Prism` bundle, which
 // pulls in every refractor grammar and produces a ~800KB chunk. Anything
@@ -54,7 +55,10 @@ export function CodeBlock({ language, code }: CodeBlockProps) {
         <button
           type="button"
           onClick={() => copy(code)}
-          className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          className={cn(
+            "inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs transition-colors hover:bg-accent hover:text-accent-foreground",
+            FOCUS_RING_CLASS
+          )}
         >
           {copied ? (
             <Check className="h-3.5 w-3.5" aria-hidden="true" />

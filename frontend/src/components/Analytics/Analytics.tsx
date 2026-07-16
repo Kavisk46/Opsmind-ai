@@ -46,7 +46,7 @@ export function Analytics() {
         title="Trends"
         description="Usage and performance over the selected period"
       >
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-4">
           <QueryVolumeChart timeRange={timeRange} />
           <ResponseTimeChart timeRange={timeRange} />
           <ApiRequestsChart timeRange={timeRange} />

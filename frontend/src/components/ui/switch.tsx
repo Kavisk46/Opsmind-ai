@@ -33,7 +33,7 @@ export function Switch({ className, label, id, ref, ...props }: SwitchProps) {
         />
         <span
           aria-hidden="true"
-          className="pointer-events-none absolute left-0.5 h-4 w-4 rounded-full bg-background shadow-sm transition-transform peer-checked:translate-x-4"
+          className="pointer-events-none absolute left-0.5 h-4 w-4 rounded-full bg-background shadow-sm transition-transform motion-reduce:transition-none peer-checked:translate-x-4"
         />
       </span>
       {label && <span className="text-sm text-foreground">{label}</span>}

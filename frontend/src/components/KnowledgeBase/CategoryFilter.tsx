@@ -4,7 +4,12 @@ import { Check, ChevronDown, LayoutGrid } from "lucide-react";
 import { useId } from "react";
 
 import { useDisclosure } from "@/hooks/use-disclosure";
-import { cn, POPOVER_PANEL_CLASS } from "@/lib/utils";
+import {
+  FOCUS_RING_CLASS,
+  POPOVER_ITEM_CLASS,
+  POPOVER_PANEL_CLASS,
+  cn,
+} from "@/lib/utils";
 
 import type { Category } from "./types";
 
@@ -41,7 +46,10 @@ export function CategoryFilter({
         onClick={toggle}
         aria-expanded={isOpen}
         aria-controls={panelId}
-        className="inline-flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className={cn(
+          "inline-flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent",
+          FOCUS_RING_CLASS
+        )}
       >
         <LayoutGrid
           className="h-4 w-4 text-muted-foreground"
@@ -66,7 +74,8 @@ export function CategoryFilter({
             aria-current={selectedCategoryId === null ? "true" : undefined}
             onClick={() => select(null)}
             className={cn(
-              "flex w-full items-center justify-between rounded-md px-2.5 py-2 text-left text-sm hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              POPOVER_ITEM_CLASS,
+              FOCUS_RING_CLASS,
               selectedCategoryId === null && "font-medium text-foreground"
             )}
           >
@@ -84,7 +93,8 @@ export function CategoryFilter({
               }
               onClick={() => select(category.id)}
               className={cn(
-                "flex w-full items-center justify-between rounded-md px-2.5 py-2 text-left text-sm hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                POPOVER_ITEM_CLASS,
+                FOCUS_RING_CLASS,
                 selectedCategoryId === category.id &&
                   "font-medium text-foreground"
               )}

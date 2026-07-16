@@ -12,7 +12,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 import { trapTabFocus } from "@/hooks/use-focus-trap";
-import { cn } from "@/lib/utils";
+import { FOCUS_RING_CLASS, cn } from "@/lib/utils";
 import { useSidebarStore } from "@/store/sidebar-store";
 
 import {
@@ -40,7 +40,8 @@ function NavLink({
       onClick={onNavigate}
       aria-current={isActive ? "page" : undefined}
       className={cn(
-        "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors motion-reduce:transition-none",
+        FOCUS_RING_CLASS,
         isActive
           ? "bg-accent text-accent-foreground"
           : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
@@ -48,7 +49,7 @@ function NavLink({
     >
       <item.icon className="h-4 w-4 shrink-0" aria-hidden="true" />
       <span
-        className={cn("truncate", isCollapsed ? "hidden" : "hidden lg:inline")}
+        className={cn("truncate", isCollapsed ? "hidden" : "hidden md:inline")}
       >
         {item.label}
       </span>
@@ -123,22 +124,25 @@ export function Sidebar() {
         ref={asideRef}
         id="app-sidebar"
         className={cn(
-          "fixed inset-y-0 left-0 z-(--z-modal) flex w-64 -translate-x-full flex-col border-r border-border bg-card transition-[transform,width] duration-200 ease-out motion-reduce:transition-none md:sticky md:top-0 md:h-screen md:w-16 md:translate-x-0",
+          "fixed inset-y-0 left-0 z-(--z-modal) flex w-64 -translate-x-full flex-col border-r border-border bg-card transition-[transform,width] duration-(--duration-base) ease-out motion-reduce:transition-none md:sticky md:top-0 md:h-screen md:translate-x-0",
           isOpen && "translate-x-0",
-          isCollapsed ? "lg:w-16" : "lg:w-64"
+          isCollapsed ? "md:w-16" : "md:w-64"
         )}
       >
         <div className="flex h-16 items-center justify-between border-b border-border px-4">
           <Link
             href="/"
             onClick={close}
-            className="flex items-center gap-2 rounded-md text-lg font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className={cn(
+              "flex items-center gap-2 rounded-md text-lg font-semibold text-foreground",
+              FOCUS_RING_CLASS
+            )}
           >
             <Sparkles
               className="h-5 w-5 shrink-0 text-primary"
               aria-hidden="true"
             />
-            <span className={cn(isCollapsed ? "hidden" : "hidden lg:inline")}>
+            <span className={cn(isCollapsed ? "hidden" : "hidden md:inline")}>
               OpsMind AI
             </span>
           </Link>
@@ -148,7 +152,10 @@ export function Sidebar() {
             type="button"
             onClick={close}
             aria-label="Close menu"
-            className="rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:hidden"
+            className={cn(
+              "rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground md:hidden",
+              FOCUS_RING_CLASS
+            )}
           >
             <X className="h-5 w-5" aria-hidden="true" />
           </button>
@@ -158,7 +165,10 @@ export function Sidebar() {
             onClick={toggleCollapsed}
             aria-expanded={!isCollapsed}
             aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-            className="hidden rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:flex"
+            className={cn(
+              "hidden rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground md:flex",
+              FOCUS_RING_CLASS
+            )}
           >
             {isCollapsed ? (
               <PanelLeftOpen className="h-5 w-5" aria-hidden="true" />
@@ -181,8 +191,9 @@ export function Sidebar() {
                     aria-expanded={isExpanded}
                     aria-controls={`nav-group-${group.id}`}
                     className={cn(
-                      "w-full items-center justify-between rounded-md px-3 py-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                      isCollapsed ? "hidden" : "hidden lg:flex"
+                      "w-full items-center justify-between rounded-md px-3 py-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase transition-colors hover:text-foreground",
+                      FOCUS_RING_CLASS,
+                      isCollapsed ? "hidden" : "hidden md:flex"
                     )}
                   >
                     <span>{group.label}</span>
@@ -197,7 +208,7 @@ export function Sidebar() {
                   <div
                     id={`nav-group-${group.id}`}
                     className={cn(
-                      "grid transition-[grid-template-rows] duration-200 ease-out motion-reduce:transition-none",
+                      "grid transition-[grid-template-rows] duration-(--duration-base) ease-out motion-reduce:transition-none",
                       isExpanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
                     )}
                   >

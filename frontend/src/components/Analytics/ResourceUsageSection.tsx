@@ -21,7 +21,7 @@ export function ResourceUsageSection({ timeRange }: ResourceUsageSectionProps) {
       title="Resource Usage"
       description="Infrastructure utilization over the selected period"
     >
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-4">
         <CpuUsageChart timeRange={timeRange} isLoading={isLoading} />
         <MemoryUsageChart timeRange={timeRange} isLoading={isLoading} />
         <NetworkUsageChart timeRange={timeRange} isLoading={isLoading} />

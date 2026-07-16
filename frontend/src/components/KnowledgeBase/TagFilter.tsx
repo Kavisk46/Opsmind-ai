@@ -4,7 +4,7 @@ import { ChevronDown, Tag as TagIcon } from "lucide-react";
 import { useId } from "react";
 
 import { useDisclosure } from "@/hooks/use-disclosure";
-import { cn, POPOVER_PANEL_CLASS } from "@/lib/utils";
+import { FOCUS_RING_CLASS, cn, POPOVER_PANEL_CLASS } from "@/lib/utils";
 
 import type { Tag } from "./types";
 
@@ -34,7 +34,10 @@ export function TagFilter({ tags, selectedTagIds, onChange }: TagFilterProps) {
         onClick={toggle}
         aria-expanded={isOpen}
         aria-controls={panelId}
-        className="inline-flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className={cn(
+          "inline-flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent",
+          FOCUS_RING_CLASS
+        )}
       >
         <TagIcon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
         Tags
@@ -66,7 +69,8 @@ export function TagFilter({ tags, selectedTagIds, onChange }: TagFilterProps) {
                   aria-pressed={isSelected}
                   onClick={() => toggleTag(tag.id)}
                   className={cn(
-                    "inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                    "inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
+                    FOCUS_RING_CLASS,
                     isSelected
                       ? "border-primary bg-primary text-primary-foreground"
                       : "border-border bg-background text-foreground hover:bg-accent"

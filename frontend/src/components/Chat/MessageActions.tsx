@@ -4,7 +4,7 @@ import { Check, Copy, RotateCcw, ThumbsDown, ThumbsUp } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { useCopyToClipboard } from "@/hooks/use-copy-to-clipboard";
-import { cn } from "@/lib/utils";
+import { FOCUS_RING_CLASS, cn } from "@/lib/utils";
 
 import type { MessageRole } from "./types";
 
@@ -17,8 +17,10 @@ interface MessageActionsProps {
 
 type Feedback = "like" | "dislike" | null;
 
-const buttonClass =
-  "inline-flex h-8 w-8 items-center justify-center rounded transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50";
+const buttonClass = cn(
+  "inline-flex h-8 w-8 items-center justify-center rounded transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50",
+  FOCUS_RING_CLASS
+);
 
 export function MessageActions({
   role,

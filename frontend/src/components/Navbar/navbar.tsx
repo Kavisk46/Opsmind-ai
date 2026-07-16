@@ -6,6 +6,7 @@ import Link from "next/link";
 import { NotificationButton } from "@/components/NotificationButton";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { UserProfileDropdown } from "@/components/UserProfileDropdown";
+import { FOCUS_RING_CLASS, cn } from "@/lib/utils";
 import { useSidebarStore } from "@/store/sidebar-store";
 
 export function Navbar() {
@@ -20,14 +21,20 @@ export function Navbar() {
         aria-expanded={isSidebarOpen}
         aria-controls="app-sidebar"
         aria-label={isSidebarOpen ? "Close menu" : "Open menu"}
-        className="inline-flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:hidden"
+        className={cn(
+          "inline-flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground md:hidden",
+          FOCUS_RING_CLASS
+        )}
       >
         <Menu className="h-5 w-5" aria-hidden="true" />
       </button>
 
       <Link
         href="/"
-        className="rounded-md text-lg font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:hidden"
+        className={cn(
+          "rounded-md text-lg font-semibold text-foreground md:hidden",
+          FOCUS_RING_CLASS
+        )}
       >
         OpsMind AI
       </Link>

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-const DEFAULT_LOAD_DELAY_MS = 500;
+export const DEFAULT_LOAD_DELAY_MS = 500;
 
 // Every page/section that renders from mock data shows a brief skeleton
 // first, so the loading state is actually observable — one shared

@@ -8,6 +8,7 @@ import { Form, useAppForm } from "@/components/Form";
 import { useAuth } from "@/components/Providers/AuthProvider";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/lib/toast";
+import { FOCUS_RING_CLASS, cn } from "@/lib/utils";
 
 import { signupSchema, type SignupFormValues } from "./auth-schemas";
 import { AuthCard } from "./AuthCard";
@@ -107,7 +108,10 @@ export function SignupForm() {
               aria-describedby={
                 acceptTermsError ? "auth-acceptTerms-error" : undefined
               }
-              className="mt-0.5 h-4 w-4 rounded border-border text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className={cn(
+                "mt-0.5 h-4 w-4 rounded border-border text-primary",
+                FOCUS_RING_CLASS
+              )}
             />
             <span>
               I agree to the{" "}

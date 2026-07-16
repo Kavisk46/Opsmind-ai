@@ -1,6 +1,6 @@
 "use client";
 
-import { cn } from "@/lib/utils";
+import { FOCUS_RING_CLASS, cn } from "@/lib/utils";
 
 import type { TimeRange } from "./types";
 
@@ -31,7 +31,8 @@ export function TimeRangeSelect({ value, onChange }: TimeRangeSelectProps) {
             aria-selected={isActive}
             onClick={() => onChange(option.value)}
             className={cn(
-              "rounded px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              "rounded px-3 py-1.5 text-sm font-medium transition-colors",
+              FOCUS_RING_CLASS,
               isActive
                 ? "bg-accent text-accent-foreground"
                 : "text-muted-foreground hover:text-foreground"

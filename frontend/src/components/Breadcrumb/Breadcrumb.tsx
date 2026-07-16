@@ -1,7 +1,7 @@
 import { ChevronRight } from "lucide-react";
 import Link from "next/link";
 
-import { cn } from "@/lib/utils";
+import { FOCUS_RING_CLASS, cn } from "@/lib/utils";
 
 export interface BreadcrumbItem {
   label: string;
@@ -38,7 +38,10 @@ export function Breadcrumb({ items, className }: BreadcrumbProps) {
               {item.href && !isLast ? (
                 <Link
                   href={item.href}
-                  className="truncate rounded-md hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className={cn(
+                    "truncate rounded-md transition-colors hover:text-foreground",
+                    FOCUS_RING_CLASS
+                  )}
                 >
                   {item.label}
                 </Link>

@@ -3,7 +3,7 @@
 import { UploadCloud } from "lucide-react";
 import { useRef, useState, type ChangeEvent, type DragEvent } from "react";
 
-import { cn } from "@/lib/utils";
+import { FOCUS_RING_CLASS, cn } from "@/lib/utils";
 
 interface UploadDropzoneProps {
   onFilesSelected: (files: File[]) => void;
@@ -73,7 +73,10 @@ export function UploadDropzone({
           type="button"
           onClick={() => inputRef.current?.click()}
           disabled={disabled}
-          className="rounded text-primary underline underline-offset-2 hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className={cn(
+            "rounded text-primary underline underline-offset-2 hover:no-underline",
+            FOCUS_RING_CLASS
+          )}
         >
           browse
         </button>
