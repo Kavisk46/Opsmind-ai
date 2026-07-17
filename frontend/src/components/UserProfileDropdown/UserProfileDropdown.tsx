@@ -2,8 +2,10 @@
 
 import { LogOut, Settings } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useId } from "react";
 
+import { GUEST_ROLE_LABEL } from "@/components/Auth/guest-mode";
 import { useAuth } from "@/components/Providers";
 import { footerNavItem } from "@/components/Sidebar/nav-items";
 import { Avatar } from "@/components/ui/avatar";
@@ -12,18 +14,30 @@ import { toast } from "@/lib/toast";
 import { FOCUS_RING_CLASS, cn, POPOVER_PANEL_CLASS } from "@/lib/utils";
 
 export function UserProfileDropdown() {
-  const { user, status, logout } = useAuth();
+  const router = useRouter();
+  const { user, status, isGuest, logout } = useAuth();
   const { isOpen, toggle, close, containerRef, triggerRef } = useDisclosure();
   const panelId = useId();
 
   const isAuthenticated = status === "authenticated" && user !== null;
   const name = isAuthenticated ? user.name : "Guest";
-  const email = isAuthenticated ? user.email : "Not signed in";
+  // In demo mode, the second line reads as a role rather than the guest's
+  // placeholder email — matches how the login page frames it as a
+  // portfolio viewer, not an account holder.
+  const secondaryLabel = isGuest
+    ? GUEST_ROLE_LABEL
+    : isAuthenticated
+      ? user.email
+      : "Not signed in";
 
   const handleLogout = async () => {
     await logout();
     close();
     triggerRef.current?.focus();
+    if (isGuest) {
+      router.replace("/login");
+      return;
+    }
     toast("Signed out.");
   };
 
@@ -61,7 +75,9 @@ export function UserProfileDropdown() {
               <p className="truncate text-sm font-medium text-foreground">
                 {name}
               </p>
-              <p className="truncate text-xs text-muted-foreground">{email}</p>
+              <p className="truncate text-xs text-muted-foreground">
+                {secondaryLabel}
+              </p>
             </div>
           </div>
 
@@ -86,12 +102,13 @@ export function UserProfileDropdown() {
             type="button"
             onClick={handleLogout}
             className={cn(
-              "flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm text-destructive transition-colors hover:bg-accent",
+              "flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm transition-colors hover:bg-accent",
+              isGuest ? "text-foreground" : "text-destructive",
               FOCUS_RING_CLASS
             )}
           >
             <LogOut className="h-4 w-4" aria-hidden="true" />
-            Log out
+            {isGuest ? "Exit Demo Mode" : "Log out"}
           </button>
         </div>
       )}

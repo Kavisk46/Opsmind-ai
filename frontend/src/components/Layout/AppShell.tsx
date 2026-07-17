@@ -1,5 +1,6 @@
 import { Suspense, type ReactNode } from "react";
 
+import { DemoModeBanner } from "@/components/Auth";
 import { Navbar } from "@/components/Navbar";
 import { Sidebar } from "@/components/Sidebar";
 import { LoadingFallback } from "@/components/ui/loading-fallback";
@@ -12,7 +13,7 @@ interface AppShellProps {
 
 export function AppShell({ children }: AppShellProps) {
   return (
-    <div className="flex min-h-screen bg-background text-foreground">
+    <div className="flex min-h-screen flex-col bg-background text-foreground">
       <RouteAnnouncer />
       <a
         href="#main-content"
@@ -20,14 +21,17 @@ export function AppShell({ children }: AppShellProps) {
       >
         Skip to content
       </a>
-      <Sidebar />
-      <div className="flex flex-1 flex-col">
-        <Navbar />
-        <main id="main-content" className="flex-1 p-gutter">
-          <div className="mx-auto w-full max-w-screen-2xl">
-            <Suspense fallback={<LoadingFallback />}>{children}</Suspense>
-          </div>
-        </main>
+      <DemoModeBanner />
+      <div className="flex flex-1">
+        <Sidebar />
+        <div className="flex flex-1 flex-col">
+          <Navbar />
+          <main id="main-content" className="flex-1 p-gutter">
+            <div className="mx-auto w-full max-w-screen-2xl">
+              <Suspense fallback={<LoadingFallback />}>{children}</Suspense>
+            </div>
+          </main>
+        </div>
       </div>
     </div>
   );

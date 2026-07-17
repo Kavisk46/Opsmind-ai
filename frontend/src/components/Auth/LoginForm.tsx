@@ -27,8 +27,9 @@ const REMEMBERED_EMAIL_KEY = "opsmind:remembered-email";
 
 export function LoginForm() {
   const router = useRouter();
-  const { login } = useAuth();
+  const { login, loginAsGuest } = useAuth();
   const [formError, setFormError] = useState<string | null>(null);
+  const [isGuestLoading, setIsGuestLoading] = useState(false);
   const rememberedEmail = getLocalStorageItem(REMEMBERED_EMAIL_KEY, "");
 
   const form = useAppForm<LoginFormValues>({
@@ -64,6 +65,18 @@ export function LoginForm() {
       }
       router.push("/");
     } catch (error) {
+      setFormError(getAuthErrorMessage(error));
+    }
+  };
+
+  const handleContinueAsGuest = async () => {
+    setIsGuestLoading(true);
+    setFormError(null);
+    try {
+      await loginAsGuest();
+      router.push("/");
+    } catch (error) {
+      setIsGuestLoading(false);
       setFormError(getAuthErrorMessage(error));
     }
   };
@@ -131,6 +144,21 @@ export function LoginForm() {
             {form.formState.isSubmitting ? "Signing in..." : "Sign in"}
           </Button>
         </Form>
+
+        <div>
+          <Button
+            type="button"
+            variant="secondary"
+            className="w-full"
+            disabled={isGuestLoading}
+            onClick={handleContinueAsGuest}
+          >
+            {isGuestLoading ? "Entering demo..." : "Continue as Guest"}
+          </Button>
+          <p className="mt-2 text-center text-xs text-muted-foreground">
+            Explore the application without creating an account.
+          </p>
+        </div>
       </AuthCard>
 
       <p className="text-center text-xs text-muted-foreground">

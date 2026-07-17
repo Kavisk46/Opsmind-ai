@@ -23,6 +23,7 @@ import {
   type ResetPasswordInput,
   type SignupInput,
 } from "@/components/Auth/auth-mock-api";
+import { GUEST_AUTH_TOKEN, GUEST_USER } from "@/components/Auth/guest-mode";
 import {
   clearSessionCookie,
   setSessionCookie,
@@ -57,7 +58,15 @@ export interface LoginResult {
 export interface AuthContextValue {
   user: AuthUser | null;
   status: AuthStatus;
+  // True only for the frontend-only Portfolio Demo Mode session (see
+  // guest-mode.ts) — never set for a real mockLogin()/mockVerifyOtp() user.
+  isGuest: boolean;
   login: (credentials: AuthCredentials) => Promise<LoginResult>;
+  // Grants the same "authenticated" state as a real login, via the same
+  // session cookie and token slots, without touching auth-mock-api.ts —
+  // there's no account to look up, so this bypasses mockLogin() entirely
+  // rather than adding a fake credential pair to auth-users.json.
+  loginAsGuest: () => Promise<void>;
   logout: () => Promise<void>;
   signup: (input: SignupInput) => Promise<void>;
   forgotPassword: (email: string) => Promise<{ resetToken: string }>;
@@ -86,6 +95,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const pathname = usePathname();
   const [user, setUser] = useState<AuthUser | null>(null);
   const [status, setStatus] = useState<AuthStatus>("unauthenticated");
+  const [isGuest, setIsGuest] = useState(false);
 
   const login = useCallback(
     async (credentials: AuthCredentials): Promise<LoginResult> => {
@@ -99,15 +109,34 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setSessionCookie();
       setUser(result.user);
       setStatus("authenticated");
+      setIsGuest(false);
       return { outcome: "authenticated", email: result.user.email };
     },
     []
   );
 
+  // Deliberately not async work beyond satisfying the `Promise<void>`
+  // shape the rest of AuthContextValue uses — kept a Promise so a future
+  // real backend (e.g. a scoped, rate-limited guest token endpoint) can
+  // slot in behind this same signature without changing any caller.
+  const loginAsGuest = useCallback(async () => {
+    setAuthToken(GUEST_AUTH_TOKEN);
+    setSessionCookie();
+    setUser(GUEST_USER);
+    setStatus("authenticated");
+    setIsGuest(true);
+  }, []);
+
   useEffect(() => {
     if (!isDev) {
       return;
     }
+    // login()'s setState calls happen inside its async body, after
+    // `await mockLogin(...)` resolves — not synchronously within this
+    // effect — but the lint rule can't see through the Promise chain to
+    // confirm that statically. Pre-existing dev-only convenience effect;
+    // not restructured here since that's out of scope for Demo Mode.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     login(DEV_AUTO_LOGIN_CREDENTIALS)
       .then(() => {
         logger.info(
@@ -135,6 +164,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     clearSessionCookie();
     setUser(null);
     setStatus("unauthenticated");
+    setIsGuest(false);
   }, []);
 
   const signup = useCallback(async (input: SignupInput) => {
@@ -156,6 +186,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setSessionCookie();
       setUser(authenticatedUser);
       setStatus("authenticated");
+      setIsGuest(false);
     },
     []
   );
@@ -176,7 +207,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
     () => ({
       user,
       status,
+      isGuest,
       login,
+      loginAsGuest,
       logout,
       signup,
       forgotPassword,
@@ -189,7 +222,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
     [
       user,
       status,
+      isGuest,
       login,
+      loginAsGuest,
       logout,
       signup,
       forgotPassword,

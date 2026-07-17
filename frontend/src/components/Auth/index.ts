@@ -1,3 +1,4 @@
+export { DemoModeBanner } from "./DemoModeBanner";
 export { ForgotPasswordForm } from "./ForgotPasswordForm";
 export { LoginForm } from "./LoginForm";
 export { RequireAuth } from "./RequireAuth";
