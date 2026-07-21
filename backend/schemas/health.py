@@ -11,6 +11,8 @@ class HealthResponse(BaseModel):
 
     status: str
     environment: str
+    version: str
+    uptime_seconds: float
 
 
 class ReadinessResponse(BaseModel):

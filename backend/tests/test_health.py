@@ -20,3 +20,10 @@ def test_health_reports_environment():
     response = client.get("/health")
     body = response.json()
     assert body["environment"] == "development"
+
+
+def test_health_reports_version_and_uptime():
+    response = client.get("/health")
+    body = response.json()
+    assert body["version"]
+    assert body["uptime_seconds"] >= 0
