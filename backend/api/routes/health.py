@@ -1,12 +1,15 @@
 import time
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.config import Settings, get_settings
+from api.dependencies import get_llm, get_vector_store
+from core.config import Settings, get_settings, settings as app_settings
 from core.database import get_db
+from core.health_checks import check_chromadb, check_database, check_llm, check_storage
+from core.vector_store import VectorStore
 from schemas.health import HealthResponse, ReadinessResponse
+from services.llm.protocol import LLMProvider
 
 router = APIRouter(tags=["health"])
 
@@ -23,7 +26,7 @@ def get_health(settings: Settings = Depends(get_settings)) -> HealthResponse:
 
     Deliberately does no real work (no DB ping, no downstream calls) so it
     stays fast and dependency-free. See get_readiness() below for the check
-    that DOES depend on the database.
+    that DOES depend on real infrastructure.
     """
     return HealthResponse(
         status="ok",
@@ -34,39 +37,43 @@ def get_health(settings: Settings = Depends(get_settings)) -> HealthResponse:
 
 
 @router.get("/health/ready", response_model=ReadinessResponse)
-async def get_readiness(db: AsyncSession = Depends(get_db)) -> ReadinessResponse:
+async def get_readiness(
+    db: AsyncSession = Depends(get_db),
+    vector_store: VectorStore = Depends(get_vector_store),
+    llm: LLMProvider = Depends(get_llm),
+) -> ReadinessResponse:
     """Readiness check — confirms the app can actually serve real traffic
-    right now, not just that the process is alive. Pings the database with
-    a trivial query; a real deployment's load balancer/orchestrator should
-    stop routing traffic here if this ever fails, even while /health still
-    reports the process itself as alive.
+    right now, not just that the process is alive. A real deployment's
+    load balancer/orchestrator should stop routing traffic here if this
+    ever fails, even while /health still reports the process itself as
+    alive.
 
-    A DB failure here is an expected, recoverable condition (the DB is
-    down/unreachable), not a bug — so it's caught and turned into a clean
-    503 with a plain message, rather than left to propagate as a raw,
-    internals-leaking 500.
-
-    Deliberately `except Exception`, not a narrower SQLAlchemy-specific
-    type: verified against a real unreachable database that the very first
-    connection attempt raises a raw, unwrapped `ConnectionRefusedError`
-    (builtin OSError) — not `sqlalchemy.exc.SQLAlchemyError` — because
-    SQLAlchemy only translates DBAPI errors once a connection already
-    exists to translate them through. Broad exception handling is usually
-    a code smell, but a readiness probe's entire job is "did this
-    dependency check succeed, yes or no" — any failure at all means
-    "not ready," regardless of its exact type.
+    Checks three HARD dependencies (database, ChromaDB, storage) — any of
+    them failing means genuinely "not ready." The LLM is checked too, but
+    informationally only: "not_loaded_yet" is a normal state for a
+    lazily-loaded model (see services/llm/local_provider.py), never a
+    reason to fail readiness — an instance that hasn't answered its first
+    chat question yet is still perfectly capable of serving every other
+    kind of request.
     """
-    try:
-        await db.execute(text("SELECT 1"))
-    except Exception as error:
-        # detail can be any JSON-serializable value, not just a string — a
-        # structured body lets a programmatic caller check response.json()
-        # ["detail"]["database"] instead of string-matching an error
-        # message. The 503 status code remains the primary signal (what a
-        # load balancer/orchestrator actually acts on); this is a
-        # secondary, human-and-machine-readable detail on top of it.
+    checks = {
+        "database": await check_database(db),
+        "chromadb": check_chromadb(vector_store),
+        "storage": check_storage(app_settings.storage_dir),
+        "llm": check_llm(llm),
+    }
+
+    hard_dependencies_ok = (
+        checks["database"] == "connected"
+        and checks["chromadb"] == "connected"
+        and checks["storage"] == "writable"
+    )
+    if not hard_dependencies_ok:
+        # detail can be any JSON-serializable value, not just a string —
+        # main.py's exception handler stringifies it into ErrorResponse.message,
+        # so a caller still sees exactly which dependency failed.
         raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail={"database": "unavailable"},
-        ) from error
-    return ReadinessResponse(status="ok", database="connected")
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=checks
+        )
+
+    return ReadinessResponse(status="ok", **checks)

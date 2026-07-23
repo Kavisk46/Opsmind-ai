@@ -15,12 +15,20 @@ if TYPE_CHECKING:
 
 class UserRole(str, Enum):
     """A bounded set of roles, not free text — same reasoning as
-    DocumentStatus in models/document.py. Only two values for now; MVP
-    scope, not a placeholder for a permissions system that doesn't exist
-    yet.
+    DocumentStatus in models/document.py. MEMBER is the default (see the
+    `role` column below); MANAGER/ADMIN are opt-in, granted explicitly.
+
+    Adding MANAGER here needs no migration: `role` is a plain String
+    column (see repositories/base.py's design note on Python-level vs.
+    database-level enums) — the database has no CHECK constraint
+    restricting which strings are valid, only this Python Enum does. A
+    native Postgres ENUM type would have required an ALTER TYPE migration
+    for this exact change; this deliberately simpler choice is why it
+    doesn't.
     """
 
     ADMIN = "admin"
+    MANAGER = "manager"
     MEMBER = "member"
 
 

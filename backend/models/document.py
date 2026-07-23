@@ -12,14 +12,22 @@ if TYPE_CHECKING:
 
 
 class DocumentStatus(str, Enum):
-    """Where a document is in the ingestion pipeline. Phase 5 only ever
-    writes UPLOADED — PROCESSING/READY/FAILED are here now so the future
-    chunking/embedding pipeline is an additive change (new code that moves
-    a row forward) instead of a migration that retrofits the concept.
+    """Where a document is in the ingestion pipeline.
+
+    EMBEDDING is a genuine addition, not just relabeling: unlike an
+    earlier, rejected proposal to split READY into READY/INDEXED (which
+    had no distinct work to justify two states), PROCESSING (extraction +
+    chunking — fast, CPU-only) and EMBEDDING (running the actual ML
+    model — measurably slower, verified directly in the RAG phase's real
+    LLM/embedding runs) really are two different, separately-observable
+    stages of work. Each transition below is committed as its own
+    transaction (see IngestionService._set_status), so a client polling
+    mid-run sees the real stage, not just "processing" the whole time.
     """
 
     UPLOADED = "uploaded"
     PROCESSING = "processing"
+    EMBEDDING = "embedding"
     READY = "ready"
     FAILED = "failed"
 
@@ -48,5 +56,9 @@ class Document(BaseModel):
     # — not a filesystem path a client should ever see directly.
     storage_key: Mapped[str] = mapped_column(String)
     status: Mapped[str] = mapped_column(String, default=DocumentStatus.UPLOADED.value)
+    # Populated only when status=FAILED — a short, safe-to-display reason
+    # (see IngestionService's exception handling for exactly what gets
+    # written here and why it's truncated before being stored).
+    error_message: Mapped[str | None] = mapped_column(String, nullable=True)
 
     owner: Mapped["User"] = relationship(back_populates="documents")

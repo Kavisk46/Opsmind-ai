@@ -4,6 +4,7 @@ from pathlib import PurePosixPath
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.storage import Storage
+from core.vector_store import VectorStore
 from models.document import Document
 from repositories.document_repository import DocumentRepository
 
@@ -28,10 +29,17 @@ class DocumentNotFoundError(Exception):
 
 
 class DocumentService:
-    def __init__(self, db: AsyncSession, storage: Storage, max_size_bytes: int):
+    def __init__(
+        self,
+        db: AsyncSession,
+        storage: Storage,
+        max_size_bytes: int,
+        vector_store: VectorStore,
+    ):
         self.repository = DocumentRepository(db)
         self.storage = storage
         self.max_size_bytes = max_size_bytes
+        self.vector_store = vector_store
 
     async def upload_document(
         self,
@@ -71,3 +79,24 @@ class DocumentService:
         if document is None or document.owner_id != owner_id:
             raise DocumentNotFoundError(document_id)
         return document
+
+    async def delete_document(
+        self, *, owner_id: uuid.UUID, document_id: uuid.UUID
+    ) -> None:
+        # Reuses get_document() rather than repeating the ownership check —
+        # same DocumentNotFoundError, same anti-enumeration guarantee, for
+        # free: a delete attempt on someone else's document 404s exactly
+        # like a GET does, never revealing that the document exists.
+        document = await self.get_document(owner_id=owner_id, document_id=document_id)
+
+        # Order matters: delete the file bytes and vectors first, the DB
+        # row second. If either delete fails (e.g. a permissions error),
+        # the DB row survives and the document is still visible/retryable.
+        # The reverse order — delete the row, then the file/vectors —
+        # risks a crash between the steps leaving orphaned data with no DB
+        # row pointing at it, invisible and unrecoverable through this
+        # API. An orphaned DB row (this order's failure mode) is at least
+        # still visible and fixable.
+        self.storage.delete(key=document.storage_key)
+        self.vector_store.delete_by_document(document_id=str(document.id))
+        await self.repository.delete(document)

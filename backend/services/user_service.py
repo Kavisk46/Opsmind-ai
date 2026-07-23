@@ -1,3 +1,5 @@
+import asyncio
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.security import hash_password
@@ -30,7 +32,16 @@ class UserService:
         if existing is not None:
             raise DuplicateEmailError(email)
 
-        password_hash = hash_password(password)
+        # bcrypt.hashpw is synchronous, CPU-bound work — a real bottleneck
+        # this phase's load testing found directly: calling it inline
+        # blocks the ENTIRE event loop for its whole duration (bcrypt is
+        # deliberately slow, that's the point of it as a KDF), which
+        # means every OTHER concurrent request on this worker — including
+        # totally unrelated ones like /health — stalls behind it too.
+        # asyncio.to_thread offloads it to a worker thread, the exact
+        # same fix already applied to LocalTransformersProvider.generate()
+        # for the identical class of problem (see its docstring).
+        password_hash = await asyncio.to_thread(hash_password, password)
         return await self.repository.create(
             email=email, name=name, password_hash=password_hash
         )

@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(.venv/Scripts/python.exe scripts/perf_server.py --port 8001)",
+      "Bash(echo \"STARTED_PID=$!\")",
+      "Bash(curl -s -o /dev/null -w \"health status: %{http_code}\\\\n\" http://127.0.0.1:8001/health)",
+      "Bash(curl -s http://127.0.0.1:8001/health)",
+      "Bash(kill %1)",
+      "Bash(.venv/Scripts/python.exe -m scripts.perf_server --port 8001)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://127.0.0.1:8001/health)",
+      "Bash(mkdir -p /tmp/opsmind_perf)",
+      "Bash(.venv/Scripts/python.exe -m locust -f scripts/locustfile.py --host http://127.0.0.1:8001 --headless -u 15 -r 5 -t 30s --csv=/tmp/opsmind_perf/load --only-summary)",
+      "Bash(.venv/Scripts/python.exe -m locust -f scripts/locustfile.py --host http://127.0.0.1:8001 --headless -u 3 -r 3 -t 10s)",
+      "Bash(.venv/Scripts/python.exe -m locust -f scripts/locustfile.py --host http://127.0.0.1:8001 --headless -u 3 -r 3)",
+      "Bash(.venv/Scripts/python.exe -m locust -f scripts/locustfile.py --host http://127.0.0.1:8001 --headless -u 15 -r 5)",
+      "Bash(.venv/Scripts/python.exe -m pytest tests/test_auth.py tests/test_users_rbac.py -q)",
+      "Bash(powershell -Command \"Get-Process python* -ErrorAction SilentlyContinue | Select-Object Id,ProcessName,CPU,StartTime\")",
+      "Bash(powershell -Command \"Get-Process python -ErrorAction SilentlyContinue | Stop-Process -Force; Start-Sleep -Seconds 1; Get-Process python -ErrorAction SilentlyContinue | Select-Object Id,ProcessName\")",
+      "Bash(powershell -Command \"Get-Process python -ErrorAction SilentlyContinue | Select-Object Id,ProcessName,CPU,StartTime\")",
+      "Bash(.venv/Scripts/python.exe -m locust -f scripts/locustfile.py --host http://127.0.0.1:8001 --headless -u 60 -r 20)",
+      "Bash(powershell -Command \"Get-Process python -ErrorAction SilentlyContinue | Stop-Process -Force\")"
+    ]
+  }
+}

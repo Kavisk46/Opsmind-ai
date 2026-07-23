@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.dependencies import get_current_user
+from api.dependencies import get_current_user, require_role
 from core.database import get_db
-from models.user import User
+from models.user import User, UserRole
 from schemas.user import UserCreate, UserResponse
 from services.user_service import DuplicateEmailError, UserService
 
@@ -11,7 +11,20 @@ router = APIRouter(prefix="/users", tags=["users"])
 
 
 @router.get("", response_model=list[UserResponse])
-async def list_users(db: AsyncSession = Depends(get_db)) -> list[User]:
+async def list_users(
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_role(UserRole.ADMIN)),
+) -> list[User]:
+    # SECURITY FIX: this route had no auth dependency at all — any
+    # unauthenticated caller could list every user's email/name/id.
+    # require_role(UserRole.ADMIN) fixes both problems at once: it depends
+    # on get_current_user internally (so a missing/invalid token now
+    # correctly 401s), then additionally requires the admin role (so an
+    # authenticated non-admin correctly 403s instead of seeing every user).
+    # The parameter is named `_` because the route doesn't need the
+    # returned User — it's declared purely to enforce the check; unlike
+    # GET /users/me below, nothing here reads who's calling.
+    #
     # Returns ORM objects, not UserResponse — `response_model` above is
     # what actually converts them at serialization time (via
     # UserResponse's `from_attributes=True`). The type hint reflects what

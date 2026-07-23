@@ -17,8 +17,14 @@ class HealthResponse(BaseModel):
 
 class ReadinessResponse(BaseModel):
     """Response body for GET /health/ready — a separate shape from
-    HealthResponse since readiness reports on a dependency (the database),
-    not just the process itself."""
+    HealthResponse since readiness reports on this instance's actual
+    dependencies, not just the process itself. `llm` is informational
+    only (see get_readiness()) — a model that hasn't loaded yet is a
+    normal state, never a reason to fail readiness.
+    """
 
     status: str
     database: str
+    chromadb: str
+    storage: str
+    llm: str

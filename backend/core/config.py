@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -45,6 +47,78 @@ class Settings(BaseSettings):
     # by default; override to an absolute path in any real deployment.
     storage_dir: str = "storage/documents"
     max_upload_size_bytes: int = 20 * 1024 * 1024  # 20 MB
+
+    # Local HuggingFace model, loaded once at process startup (see
+    # main.py's lifespan) — no external API call, no API key. ~80MB,
+    # CPU-friendly, the standard default for semantic search over
+    # short-to-medium passages (this project's chunks are well within
+    # its comfortable range).
+    embedding_model_name: str = "sentence-transformers/all-MiniLM-L6-v2"
+
+    # Where ChromaDB's embedded/persistent client writes its index —
+    # analogous to storage_dir, but for vectors instead of file bytes.
+    # No server process, no Docker service: like SQLite, it's a real
+    # database, just embedded in this process rather than run separately.
+    chroma_persist_dir: str = "storage/chroma"
+
+    # Chunking: how the extracted text of a document is split before
+    # embedding. Overlap exists so a sentence/idea split across a chunk
+    # boundary still appears whole in at least one neighboring chunk.
+    chunk_size_chars: int = 1000
+    chunk_overlap_chars: int = 200
+
+    # RAG: how many chunks to retrieve per question.
+    retrieval_top_k: int = 5
+
+    # Which LLM backend answers questions, and how. "local" (the default)
+    # stays the free, no-API-key, no-external-dependency choice this
+    # project has deliberately used throughout — switching to "openai" or
+    # "anthropic" is a config change, not a code change, but requires a
+    # real API key this project doesn't ship with. A Literal, not a plain
+    # str, for the same reason DocumentStatus/UserRole are enums, not
+    # free text: an invalid provider name fails fast and loudly at
+    # startup (Pydantic validation), not silently at the first chat
+    # request.
+    llm_provider: Literal["local", "openai", "anthropic", "ollama"] = "local"
+    # Model name is provider-specific in meaning (a HuggingFace repo ID
+    # for "local", an OpenAI model name for "openai", etc.) but shared as
+    # one setting — only one provider is ever active at a time, so there's
+    # no need for four separate model-name settings.
+    llm_model_name: str = "Qwen/Qwen2.5-0.5B-Instruct"
+    # None by default — the local provider needs no key at all; only
+    # openai/anthropic read this, and each raises a clear, explicit error
+    # at call time (not a cryptic SDK error) if it's missing.
+    llm_api_key: str | None = None
+    # 0.0 (deterministic/greedy) matches the local provider's existing
+    # do_sample=False choice — reproducible answers were already the
+    # deliberate default; this makes that choice an explicit, visible
+    # setting instead of a hardcoded implementation detail.
+    llm_temperature: float = 0.0
+    llm_max_output_tokens: int = 256
+    # Only meaningful for network-based providers (openai/anthropic) —
+    # the local provider runs in-process with no request to time out.
+    # Still a shared setting rather than provider-specific, for the same
+    # "only one provider active at once" reason as llm_model_name.
+    llm_request_timeout_seconds: float = 30.0
+
+    # How many prior messages (user + assistant combined) PromptBuilder
+    # includes as conversation history — see services/prompt_builder.py.
+    # Bounded rather than unlimited: an ever-growing conversation would
+    # otherwise mean an ever-growing prompt, eventually exceeding the
+    # model's context window and increasing latency/cost on every turn
+    # regardless of whether the early history is still relevant.
+    max_history_messages: int = 10
+
+    # A TOKEN budget for conversation history — ConversationService's
+    # primary truncation mechanism (see services/conversation_service.py),
+    # more accurate than a flat message count since a handful of long
+    # messages can consume far more of a model's context window than a
+    # dozen short ones. max_history_messages above remains a secondary,
+    # defensive cap in PromptBuilder in case token estimates are ever off.
+    # ~2000 tokens is a deliberately modest default, leaving most of a
+    # small model's context window for the retrieved document context and
+    # the answer itself.
+    max_history_tokens: int = 2000
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
