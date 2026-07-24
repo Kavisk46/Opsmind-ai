@@ -73,8 +73,19 @@ class VectorStore:
             }
             for i in range(len(chunks))
         ]
+        # chromadb's stubs declare `embeddings`/`metadatas` in terms of
+        # numpy ndarray types more specific than the plain Python
+        # list[list[float]]/list[dict] this method actually passes; at
+        # runtime the client accepts plain lists directly (proven by this
+        # project's own real, passing tests against a real embedded
+        # ChromaDB — see tests/test_vector_store.py). The stub being
+        # stricter than the library actually is, not a bug here — hence
+        # the ignore on the specific line mypy flags below.
         self._collection.upsert(
-            ids=ids, embeddings=embeddings, documents=chunks, metadatas=metadatas
+            ids=ids,
+            embeddings=embeddings,  # type: ignore[arg-type]
+            documents=chunks,
+            metadatas=metadatas,  # type: ignore[arg-type]
         )
 
     def query(
@@ -87,17 +98,29 @@ class VectorStore:
         "which stored chunks are most semantically similar to this
         vector," which is exactly what RetrievalService calls this for.
         """
+        # Same stub-vs-reality gap as upsert() above — query_embeddings
+        # accepts a plain list[list[float]] at runtime.
         results = self._collection.query(
-            query_embeddings=[query_embedding],
+            query_embeddings=[query_embedding],  # type: ignore[arg-type]
             n_results=top_k,
             where={"owner_id": owner_id},
         )
 
         chunks = []
-        documents = results["documents"][0]
-        metadatas = results["metadatas"][0]
-        distances = results["distances"][0]
-        for text, metadata, distance in zip(documents, metadatas, distances):
+        # Each indexed field's stub type is Optional (the Chroma API can
+        # be asked to omit any of them) — in practice these three are
+        # always populated since none of them were explicitly excluded
+        # above, so the stub is being more cautious than this specific,
+        # fixed call actually needs to account for.
+        documents = results["documents"][0]  # type: ignore[index]
+        metadatas = results["metadatas"][0]  # type: ignore[index]
+        distances = results["distances"][0]  # type: ignore[index]
+        # strict=True: these three lists all come from the same Chroma
+        # query result, one entry per returned match — they should always
+        # be the same length. Making that assumption explicit means a
+        # future Chroma API change that ever violated it would raise
+        # loudly here, not silently truncate to the shortest list.
+        for text, metadata, distance in zip(documents, metadatas, distances, strict=True):
             page_number = metadata.get("page_number", _NO_PAGE_NUMBER)
             chunks.append(
                 {

@@ -1,9 +1,17 @@
 import asyncio
 import time
-from typing import AsyncIterator
+from collections.abc import AsyncIterator
+from typing import TYPE_CHECKING
 
 from core.logging import logger
 from services.llm.protocol import LLMResponse
+
+if TYPE_CHECKING:
+    # Type-checking only — the real import stays lazy inside
+    # _generate_sync() below (see this class's own docstring: importing
+    # transformers at module load would slow down every test run and
+    # app startup, whether or not the local provider is ever used).
+    from transformers import Pipeline
 
 
 class LocalTransformersProvider:
@@ -26,7 +34,7 @@ class LocalTransformersProvider:
     def __init__(self, model_name: str, max_new_tokens: int = 256):
         self._model_name = model_name
         self._max_new_tokens = max_new_tokens
-        self._pipeline = None
+        self._pipeline: Pipeline | None = None
 
     @property
     def is_loaded(self) -> bool:

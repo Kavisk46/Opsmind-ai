@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import bcrypt
 import jwt
@@ -31,7 +31,7 @@ def create_access_token(subject: str) -> str:
     string — JWT claims must be JSON-serializable, and a UUID object isn't).
     Anyone holding this token is trusted as that user until it expires.
     """
-    expire = datetime.now(timezone.utc) + timedelta(
+    expire = datetime.now(UTC) + timedelta(
         minutes=settings.access_token_expire_minutes
     )
     payload = {"sub": subject, "exp": expire}

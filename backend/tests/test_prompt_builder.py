@@ -1,6 +1,5 @@
 from services.prompt_builder import ContextChunk, PromptBuilder
 
-
 # --- format_context() ---
 
 

@@ -1,7 +1,7 @@
 import time
 import uuid
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
-from typing import AsyncIterator
 
 from core.logging import logger
 from services.ai_metrics_service import AIMetricsRecorder

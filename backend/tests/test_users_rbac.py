@@ -94,3 +94,51 @@ def test_get_my_profile_returns_the_calling_user(client):
 def test_get_my_profile_without_auth_returns_401(client):
     response = client.get("/users/me")
     assert response.status_code == 401
+
+
+# --- Security Hardening phase ---
+
+
+def test_create_user_with_too_short_password_returns_422(client):
+    # Before this phase, a single-character password was accepted all
+    # the way through to a real bcrypt hash — schemas/user.py's
+    # UserCreate.password now enforces min_length=8.
+    response = client.post(
+        "/users", json={"email": "shortpw@example.com", "name": "Someone", "password": "short"}
+    )
+    assert response.status_code == 422
+
+
+def test_create_user_with_exactly_minimum_password_length_succeeds(client):
+    # The boundary itself must still work — a common off-by-one mistake
+    # would reject exactly 8 characters instead of only rejecting fewer.
+    response = client.post(
+        "/users",
+        json={"email": "minpw@example.com", "name": "Someone", "password": "8chars!!"},
+    )
+    assert response.status_code == 201
+
+
+def test_signup_rate_limit_blocks_after_max_attempts(client):
+    # 10 is this fixture's configured max_requests for signup (see
+    # tests/conftest.py's signup_rate_limiter) — the 11th within the
+    # same window must be rejected. Each call uses a distinct email so
+    # the request fails for a DIFFERENT reason (successful creation) than
+    # the one under test (rate limiting) until the limit is actually hit.
+    for i in range(10):
+        response = client.post(
+            "/users",
+            json={
+                "email": f"ratelimit-signup-{i}@example.com",
+                "name": "Someone",
+                "password": "secret123",
+            },
+        )
+        assert response.status_code == 201
+
+    response = client.post(
+        "/users",
+        json={"email": "ratelimit-signup-11@example.com", "name": "Someone", "password": "secret123"},
+    )
+    assert response.status_code == 429
+    assert response.json()["error"] == "too_many_requests"

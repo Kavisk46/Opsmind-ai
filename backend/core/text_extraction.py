@@ -2,6 +2,15 @@ import io
 
 from pypdf import PdfReader
 
+# The single source of truth for "what file types can this pipeline
+# actually do anything with" — imported by services/document_service.py
+# to reject an unsupported upload immediately (400), not just here,
+# where it would otherwise only be discovered during background
+# ingestion (see IngestionService.process_document), after the file has
+# already been accepted, stored, and the client told 202. One constant,
+# not two independently-maintained lists that could drift apart.
+SUPPORTED_CONTENT_TYPES = frozenset({"text/plain", "text/markdown", "application/pdf"})
+
 
 class UnsupportedContentTypeError(Exception):
     """Raised when a document's content_type has no known text-extraction

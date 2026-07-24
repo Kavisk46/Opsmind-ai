@@ -16,6 +16,7 @@ from api.dependencies import (
     get_ingestion_service,
     get_login_rate_limiter,
     get_session_factory,
+    get_signup_rate_limiter,
 )
 from core.database import get_db
 from core.rate_limit import RateLimiter
@@ -146,6 +147,12 @@ def client():
     # 6th rapid login attempt can trip the limit), while still being a
     # brand new, empty-count instance for the NEXT test.
     login_rate_limiter = RateLimiter(max_requests=5, window_seconds=60)
+    # Same reasoning, same production-matching value (see
+    # api/dependencies.py's _signup_rate_limiter) — matching production
+    # exactly rather than using a more generous test-only value is what
+    # lets test_users_rbac.py assert this limit is real, the same way
+    # test_observability.py already does for login.
+    signup_rate_limiter = RateLimiter(max_requests=10, window_seconds=60)
     # Same "one instance per test, shared across every request in it"
     # reasoning as login_rate_limiter — AIMetricsService's in-memory
     # aggregates would be meaningless if a fresh, empty instance were
@@ -254,6 +261,9 @@ def client():
     async def override_get_login_rate_limiter() -> RateLimiter:
         return login_rate_limiter
 
+    async def override_get_signup_rate_limiter() -> RateLimiter:
+        return signup_rate_limiter
+
     # Real bug, caught by running the streaming tests: the streaming
     # route needs a session factory usable from INSIDE its generator,
     # after the request has already returned (see api/routes/chat.py's
@@ -273,6 +283,7 @@ def client():
     app.dependency_overrides[get_conversation_service] = override_get_conversation_service
     app.dependency_overrides[get_chat_service] = override_get_chat_service
     app.dependency_overrides[get_login_rate_limiter] = override_get_login_rate_limiter
+    app.dependency_overrides[get_signup_rate_limiter] = override_get_signup_rate_limiter
     app.dependency_overrides[get_session_factory] = override_get_session_factory
     app.dependency_overrides[get_ai_metrics_service] = override_get_ai_metrics_service
 

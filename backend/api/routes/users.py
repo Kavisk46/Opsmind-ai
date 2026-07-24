@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.dependencies import get_current_user, require_role
+from api.dependencies import get_current_user, get_signup_rate_limiter, require_role
 from core.database import get_db
+from core.rate_limit import RateLimiter
 from models.user import User, UserRole
 from schemas.user import UserCreate, UserResponse
 from services.user_service import DuplicateEmailError, UserService
@@ -44,8 +45,19 @@ async def get_my_profile(current_user: User = Depends(get_current_user)) -> User
 
 @router.post("", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def create_user(
-    payload: UserCreate, db: AsyncSession = Depends(get_db)
+    payload: UserCreate,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    rate_limiter: RateLimiter = Depends(get_signup_rate_limiter),
 ) -> User:
+    # Checked before anything else — same reasoning and pattern as
+    # POST /auth/login (api/routes/auth.py): before this phase, nothing
+    # stood between a script and unlimited account creation, each one
+    # also paying a real bcrypt hash. Keyed by client IP, same accepted
+    # shared-NAT trade-off already documented for login.
+    client_host = request.client.host if request.client else "unknown"
+    rate_limiter.check(client_host)
+
     # This is the route's real job in a layered architecture: translate
     # between HTTP concerns (request bodies, status codes) and the
     # service's plain-Python API. The service doesn't know what a 409 is;

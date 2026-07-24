@@ -1,6 +1,6 @@
 import asyncio
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 
 def _make_user(user_repository, email: str = "conv-owner@example.com"):
@@ -56,7 +56,7 @@ def test_list_by_owner_orders_most_recently_updated_first(
     # the front despite being created earlier, proving list_by_owner()
     # orders by actual activity (updated_at), not creation order.
     asyncio.run(
-        conversation_repository.update(first, updated_at=datetime.now(timezone.utc))
+        conversation_repository.update(first, updated_at=datetime.now(UTC))
     )
 
     result = asyncio.run(conversation_repository.list_by_owner(owner.id))

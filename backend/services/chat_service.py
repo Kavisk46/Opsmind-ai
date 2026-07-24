@@ -1,17 +1,19 @@
 import uuid
-from typing import AsyncIterator
+from collections.abc import AsyncIterator
 
 from models.conversation import Conversation
 from models.message import MessageRole
-from services.conversation_service import ConversationService
-from services.orchestrator import AIOrchestrator, OrchestratorResult
-from services.tools import Citation
 
 # Re-exported so existing callers (api/routes/chat.py) don't need to know
 # this moved to ConversationService — ChatService's public error surface
 # stays the same even though the responsibility it once owned directly
 # has been extracted out.
-from services.conversation_service import ConversationNotFoundError  # noqa: F401
+from services.conversation_service import (
+    ConversationNotFoundError,  # noqa: F401
+    ConversationService,
+)
+from services.orchestrator import AIOrchestrator, OrchestratorResult
+from services.tools import Citation
 
 
 class EmptyQuestionError(Exception):

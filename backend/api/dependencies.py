@@ -141,6 +141,18 @@ _prompt_builder = PromptBuilder(max_history_messages=settings.max_history_messag
 # at this project's current scale.
 _login_rate_limiter = RateLimiter(max_requests=5, window_seconds=60)
 
+# A SEPARATE instance, not the same one login uses — signup and login
+# are different actions with different abuse profiles (mass account
+# creation vs. credential brute-forcing); sharing one counter would mean
+# a burst of one silently ate into the other's budget. A little more
+# generous than login's 5/60s: signup is a normal, non-suspicious action
+# most callers only need once, but with zero limit before this phase,
+# nothing stood between a script and mass account creation — each one
+# also paying a real bcrypt hash, the same CPU-cost concern this
+# project's own performance-testing phase already found and fixed for
+# the event-loop-blocking case (see services/user_service.py).
+_signup_rate_limiter = RateLimiter(max_requests=10, window_seconds=60)
+
 # Process-wide, same reasoning as _login_rate_limiter: AIMetricsService's
 # in-memory history and running aggregates (see its docstring) only mean
 # anything if every request accumulates into the SAME instance, not a
@@ -172,6 +184,10 @@ async def get_llm() -> LLMProvider:
 
 async def get_login_rate_limiter() -> RateLimiter:
     return _login_rate_limiter
+
+
+async def get_signup_rate_limiter() -> RateLimiter:
+    return _signup_rate_limiter
 
 
 async def get_ai_metrics_service() -> AIMetricsService:

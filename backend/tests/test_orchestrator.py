@@ -24,6 +24,15 @@ class _StubTool:
         self.called_with = (query, owner_id)
         if self._raises is not None:
             raise self._raises
+        # A real test-authoring mistake this guards against: constructing
+        # _StubTool with neither `result=` nor `raises=` used to return
+        # None silently, satisfying nothing and failing confusingly
+        # wherever the caller then touched the "result." Widening the
+        # return type to `ToolResult | None` instead would make this
+        # class structurally incompatible with the real `Tool` protocol
+        # (services/tools.py) it's standing in for, so narrowing with an
+        # assert here is the correct fix, not a type-annotation change.
+        assert self._result is not None, "_StubTool needs result= when raises= isn't set"
         return self._result
 
 

@@ -72,3 +72,45 @@ RETRIEVAL_DURATION_SECONDS = Histogram(
     "Retrieval duration in seconds",
     ["tool"],
 )
+
+
+# Volume 4 Phase 4: Observability & Monitoring.
+#
+# Labeled by `operation` (get_by_id/get_all/create/update/delete/exists —
+# BaseRepository's own six generic methods) and `model` (the entity name,
+# e.g. "User"/"Document" — repositories/base.py's `self.model.__name__`).
+# Both are small, fixed sets — one series per (operation, model) pair,
+# never per query/row, same cardinality discipline as every metric above.
+#
+# Deliberately instrumented at BaseRepository, not in every individual
+# repository method — this covers the ~80% shared path every repository
+# inherits (the same reasoning BaseRepository itself already documents
+# for code reuse) in one place. Repository-SPECIFIC queries
+# (UserRepository.get_by_email, ConversationRepository.list_by_owner,
+# etc.) are NOT individually instrumented — each would need its own
+# timing code, which is real, uncaptured effort left for whenever a
+# specific slow custom query actually needs investigating, not applied
+# blindly everywhere up front.
+DB_QUERY_DURATION_SECONDS = Histogram(
+    "opsmind_db_query_duration_seconds",
+    "Database query duration in seconds, for BaseRepository's shared CRUD methods",
+    ["operation", "model"],
+)
+
+# Labeled by `outcome` (success/failed/deleted_before_processing) — a
+# document deleted between upload and background-task pickup is a real,
+# normal, non-error outcome (see IngestionService.process_document's
+# early return), worth distinguishing from a genuine processing failure
+# rather than lumping both under "not success."
+INGESTION_DURATION_SECONDS = Histogram(
+    "opsmind_ingestion_duration_seconds",
+    "Document ingestion pipeline duration in seconds (extract -> chunk -> embed -> store)",
+    ["outcome"],
+    # Ingestion is measured in whole seconds, not milliseconds (unlike
+    # the HTTP/AI histograms above, which use Prometheus's default
+    # buckets) — a document can legitimately take many seconds to
+    # process, so the default buckets (topping out at 10s) would bucket
+    # almost everything into the same "+Inf" catch-all, losing exactly
+    # the resolution that matters for this metric.
+    buckets=(1, 2, 5, 10, 30, 60, 120, 300),
+)

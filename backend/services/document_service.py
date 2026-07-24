@@ -4,6 +4,7 @@ from pathlib import PurePosixPath
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.storage import Storage
+from core.text_extraction import SUPPORTED_CONTENT_TYPES
 from core.vector_store import VectorStore
 from models.document import Document
 from repositories.document_repository import DocumentRepository
@@ -16,6 +17,20 @@ class EmptyFileError(Exception):
 
 class FileTooLargeError(Exception):
     """Raised when an upload exceeds the configured size limit."""
+
+
+class UnsupportedFileTypeError(Exception):
+    """Raised when a client-declared content_type isn't one this pipeline
+    can extract text from — checked and rejected HERE, at upload time,
+    rather than only discovered later during background ingestion. Before
+    this, an arbitrary file (a .zip, an .exe, anything) with any
+    content_type was accepted, stored to disk, given a 202, and only
+    failed minutes later in a background task — wasted storage and
+    bandwidth for something rejectable in milliseconds. This is a
+    declared-content-type check, not a magic-bytes/real-file-sniffing
+    check — a client can still LIE about content_type (see this phase's
+    security review for why that's an accepted, honestly-documented
+    limit, not something this fixes)."""
 
 
 class DocumentNotFoundError(Exception):
@@ -53,6 +68,8 @@ class DocumentService:
             raise EmptyFileError(filename)
         if len(data) > self.max_size_bytes:
             raise FileTooLargeError(filename)
+        if content_type not in SUPPORTED_CONTENT_TYPES:
+            raise UnsupportedFileTypeError(content_type)
 
         # A random key, not the original filename, so two uploads named
         # "notes.pdf" by different users never collide on disk — the

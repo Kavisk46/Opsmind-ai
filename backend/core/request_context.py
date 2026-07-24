@@ -22,7 +22,13 @@ def get_request_id() -> str | None:
     return _request_id_var.get()
 
 
-def set_user_id(user_id: str) -> None:
+def set_user_id(user_id: str | None) -> None:
+    # Genuinely called with None, not just str — main.py's middleware
+    # resets this to None at the START of every request (before auth
+    # runs), so a request that never authenticates doesn't keep showing
+    # the PREVIOUS request's user_id in its logs. The parameter was
+    # narrowly typed as `str` only, which mypy correctly flagged as
+    # incompatible with that real, intentional call.
     _user_id_var.set(user_id)
 
 

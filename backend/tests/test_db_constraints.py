@@ -8,7 +8,6 @@ from sqlalchemy.exc import IntegrityError
 from models.team import Team
 from models.user import User
 
-
 # --- unique constraint ---
 
 

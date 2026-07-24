@@ -1,8 +1,17 @@
 import time
-from typing import AsyncIterator
+from collections.abc import AsyncIterator
+from typing import TYPE_CHECKING
 
 from core.logging import logger
 from services.llm.protocol import LLMResponse
+
+if TYPE_CHECKING:
+    # Only for type-checking — the real import stays lazy, inside
+    # generate()/generate_stream() below, so this module never actually
+    # imports the openai SDK unless a real call is made (see this
+    # class's own docstring on why). TYPE_CHECKING is always False at
+    # runtime, so this branch never executes.
+    from openai import AsyncOpenAI
 
 
 class MissingAPIKeyError(Exception):
@@ -50,7 +59,7 @@ class OpenAIProvider:
         self._temperature = temperature
         self._max_output_tokens = max_output_tokens
         self._timeout_seconds = timeout_seconds
-        self._client = None
+        self._client: AsyncOpenAI | None = None
 
     @property
     def is_loaded(self) -> bool:

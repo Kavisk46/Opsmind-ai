@@ -1,0 +1,51 @@
+line-length = 96
+target-version = "py312"
+
+# Alembic-GENERATED migration files (not alembic/env.py, which is
+# hand-written config) are machine boilerplate, not this project's own
+# code style — and, more importantly, migrations already applied to any
+# real environment are a historical record (see the database-testing
+# phase's write-up): editing one to satisfy a linter, even for a purely
+# cosmetic Union[X, None] -> X | None rewrite, is worse than leaving a
+# lint finding unfixed. Verified directly: every UP*/B905 finding this
+# config would otherwise flag lives exclusively in this directory —
+# zero hits anywhere in hand-written application code.
+extend-exclude = ["alembic/versions"]
+
+[lint]
+# E/W (pycodestyle) + F (pyflakes) are Ruff's own defaults — real bugs
+# and genuine style violations, not pedantic nitpicks. Added on top:
+# I (import sorting/grouping — this codebase already follows a
+# consistent stdlib/third-party/local grouping by hand; this just
+# enforces it mechanically), UP (flags outdated syntax a codebase
+# targeting py312 has no reason to still use), B (flake8-bugbear —
+# catches real correctness footguns standard pyflakes misses, e.g.
+# mutable default arguments).
+select = ["E", "W", "F", "I", "UP", "B"]
+
+# E501 (line too long) is handled by `line-length` above and Ruff's
+# formatter, not worth hard-failing CI over on a codebase with many
+# long, deliberately-explanatory comments (this project's own
+# established style throughout every phase) — a wrapped comment is not
+# a bug.
+#
+# B008 (function-call-in-default-argument) is a well-documented FALSE
+# POSITIVE for FastAPI: `db: AsyncSession = Depends(get_db)` is the
+# framework's own required dependency-injection idiom, not a mutable-
+# default-argument bug (what B008 actually exists to catch). Verified
+# directly: 50 of this codebase's 106 initial findings were this single
+# rule firing on every `Depends(...)` in api/dependencies.py and every
+# route file — ignoring it globally, not just for one directory, since
+# Depends() appears everywhere routes and dependencies are defined.
+#
+# UP042 (str+Enum -> StrEnum) and UP046 (Generic[T] -> PEP 695 `class
+# X[T]`) are each real, legitimate modernizations found in real
+# application code (models/user.py, models/document.py,
+# models/message.py, repositories/base.py) — not false positives like
+# B008. Left unfixed deliberately: both touch core, pervasively-used
+# abstractions (every domain enum; the base class every repository
+# inherits from) with subtly different runtime semantics than what's
+# there now, which is a real design decision, not a lint autofix — see
+# this phase's write-up. Ignored here rather than silently changed as a
+# side effect of setting up CI.
+ignore = ["E501", "B008", "UP042", "UP046"]

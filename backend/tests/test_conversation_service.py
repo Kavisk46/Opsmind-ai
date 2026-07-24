@@ -1,6 +1,6 @@
 import asyncio
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
@@ -16,7 +16,7 @@ class _FakeConversation:
         self.id = id
         self.user_id = user_id
         self.title = title
-        self.updated_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(UTC)
 
 
 class _FakeMessage:
@@ -188,7 +188,7 @@ def test_list_conversations_orders_most_recently_updated_first():
     # the second one despite being created earlier.
     asyncio.run(
         service.conversation_repository.update(
-            first, updated_at=datetime.now(timezone.utc)
+            first, updated_at=datetime.now(UTC)
         )
     )
 

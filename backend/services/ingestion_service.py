@@ -1,3 +1,4 @@
+import time
 import uuid
 
 from sqlalchemy.ext.asyncio import async_sessionmaker
@@ -5,6 +6,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 from core.chunking import chunk_text
 from core.embeddings import EmbeddingModel
 from core.logging import logger
+from core.metrics import INGESTION_DURATION_SECONDS
 from core.storage import Storage
 from core.text_extraction import clean_text, extract_text
 from core.vector_store import VectorStore
@@ -56,9 +58,17 @@ class IngestionService:
         self.chunk_overlap = chunk_overlap
 
     async def process_document(self, document_id: uuid.UUID) -> None:
+        start_time = time.perf_counter()
         document = await self._set_status(document_id, DocumentStatus.PROCESSING)
         if document is None:
-            return  # deleted before processing ever started
+            # Deleted before processing ever started — a real, normal
+            # outcome (see the class docstring), recorded under its own
+            # label rather than silently skipping the metric or lumping
+            # it in with "success."
+            INGESTION_DURATION_SECONDS.labels(outcome="deleted_before_processing").observe(
+                time.perf_counter() - start_time
+            )
+            return
 
         try:
             data = self.storage.open(key=document.storage_key)
@@ -103,6 +113,9 @@ class IngestionService:
                 )
 
             await self._set_status(document_id, DocumentStatus.READY)
+            INGESTION_DURATION_SECONDS.labels(outcome="success").observe(
+                time.perf_counter() - start_time
+            )
         except Exception as error:
             # Deliberately catches everything: a corrupt PDF, a storage
             # read failure, an embedding model error — all of them mean
@@ -123,6 +136,9 @@ class IngestionService:
                 document_id,
                 DocumentStatus.FAILED,
                 error_message=str(error)[:_MAX_ERROR_MESSAGE_LENGTH],
+            )
+            INGESTION_DURATION_SECONDS.labels(outcome="failed").observe(
+                time.perf_counter() - start_time
             )
             raise
 

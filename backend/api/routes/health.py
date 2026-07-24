@@ -4,7 +4,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dependencies import get_llm, get_vector_store
-from core.config import Settings, get_settings, settings as app_settings
+from core.config import Settings, get_settings
+from core.config import settings as app_settings
 from core.database import get_db
 from core.health_checks import check_chromadb, check_database, check_llm, check_storage
 from core.vector_store import VectorStore

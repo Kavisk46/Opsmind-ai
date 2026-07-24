@@ -1,15 +1,61 @@
-FROM python:3.12-slim
+# --- builder: install dependencies into an isolated virtualenv --------
+# Separated from the runtime stage so pip's build artifacts, its cache,
+# and (if any dependency ever needs one) a C compiler never end up in
+# the final image — only the installed *virtualenv* gets copied forward
+# below. requirements.txt is copied and installed BEFORE the rest of the
+# source so Docker's layer cache only reinstalls dependencies when
+# requirements.txt itself changes, not on every code edit — this
+# already existed and is worth keeping exactly as-is.
+FROM python:3.12-slim AS builder
 
 WORKDIR /app
 
-# Copied and installed before the rest of the source so Docker's layer
-# cache only reinstalls dependencies when requirements.txt actually
-# changes, not on every code edit.
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# --- runtime: the actual production image ------------------------------
+# Fresh FROM python:3.12-slim, not `FROM builder` — pip itself, any
+# build-only tooling, and requirements.txt's own resolution metadata
+# never exist in this final image, only the /opt/venv this stage copies
+# in below.
+FROM python:3.12-slim AS runtime
+
+WORKDIR /app
+
+# A dedicated, unprivileged user — this process should never run as
+# root inside the container, even though the container is already
+# namespace-isolated from the host (defense in depth: a bug that lets
+# an attacker execute arbitrary code inside this container still can't
+# trivially escalate to root within it).
+RUN groupadd --system app && useradd --system --gid app --no-create-home app
+
+COPY --from=builder /opt/venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
 COPY . .
 
+# storage/ and the ChromaDB persist dir are both written to by this
+# process at runtime (uploaded files, vector index) — owned by `app`
+# specifically so a non-root process can actually write there; without
+# this, the first real upload would fail with a permissions error the
+# moment USER app takes effect below.
+RUN mkdir -p storage/documents storage/chroma \
+    && chown -R app:app /app
+
+USER app
+
 EXPOSE 8000
+
+# Hits the real, already-existing GET /health endpoint (api/routes/health.py)
+# — no separate healthcheck script needed. start-period gives the
+# process time to finish import-time work (this app's heaviest imports —
+# torch/transformers/sentence-transformers/chromadb — genuinely take
+# real wall-clock time, verified directly during this project's own
+# perf-testing phase) before a slow *first* check counts as a failure.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+    CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health', timeout=3).status == 200 else 1)"
 
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

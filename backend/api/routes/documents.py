@@ -17,6 +17,7 @@ from services.document_service import (
     DocumentService,
     EmptyFileError,
     FileTooLargeError,
+    UnsupportedFileTypeError,
 )
 from services.ingestion_service import IngestionService
 
@@ -50,6 +51,14 @@ async def upload_document(
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
             detail="Uploaded file exceeds the maximum allowed size.",
+        ) from error
+    except UnsupportedFileTypeError as error:
+        # 415, not 400 — the request itself is well-formed; specifically
+        # its PAYLOAD's media type is what's unsupported, which is
+        # exactly what 415 Unsupported Media Type means.
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail="Unsupported file type. Supported types: .txt, .md, .pdf.",
         ) from error
 
     # Scheduled to run AFTER this response is sent — the client gets 202

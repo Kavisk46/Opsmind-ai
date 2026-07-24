@@ -37,10 +37,25 @@ class Settings(BaseSettings):
 
     # JWT signing. The dev default below is fine for local work but MUST be
     # overridden with a real secret in any real deployment — anyone who
-    # knows this value can forge valid tokens for any user.
+    # knows this value can forge valid tokens for any user. main.py's
+    # lifespan refuses to start with this exact value outside
+    # environment="development" — see _INSECURE_DEFAULT_SECRET_KEY below.
     secret_key: str = "dev-only-insecure-secret-change-in-production"
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 30
+
+    # Which origins may make cross-origin requests to this API (see
+    # main.py's CORSMiddleware). A comma-separated STRING, not a
+    # list[str] field — pydantic-settings would otherwise expect a JSON
+    # array in the env var (`CORS_ALLOWED_ORIGINS=["http://x"]`), an
+    # awkward format to hand-type in a .env file; a plain comma-separated
+    # string plus the small property below is simpler to author.
+    # Defaults to the frontend's own local dev origin (matches
+    # docker-compose.yml's frontend port) — deliberately never a
+    # wildcard ("*"), even for local development, so this setting is
+    # never one careless edit away from an accidentally-permissive
+    # production value.
+    cors_allowed_origins_raw: str = "http://localhost:3000"
 
     # Where uploaded document bytes are written (see core/storage.py's
     # LocalStorage). Relative to the backend process's working directory
@@ -122,11 +137,27 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
+    @property
+    def cors_allowed_origins(self) -> list[str]:
+        return [
+            origin.strip()
+            for origin in self.cors_allowed_origins_raw.split(",")
+            if origin.strip()
+        ]
+
 
 # Instantiated once at import time and reused everywhere — see the "why one
 # Settings instance" note in the Phase 0 write-up for why this beats calling
 # os.environ.get() ad hoc across the codebase.
 settings = Settings()
+
+# Checked explicitly at startup (main.py's lifespan) rather than left as
+# just a docstring warning — a hardcoded, publicly-visible-in-this-repo
+# secret is the single highest-impact misconfiguration this app could
+# ship with (anyone who reads this file can forge a valid auth token for
+# any user), and "the comment says to change it" has no enforcement
+# behind it at all.
+INSECURE_DEFAULT_SECRET_KEY = "dev-only-insecure-secret-change-in-production"
 
 
 def get_settings() -> Settings:

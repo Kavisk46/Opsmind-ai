@@ -112,6 +112,7 @@ def test_embedding_status_is_visible_while_embedding_runs(client):
             async def _check_status() -> str:
                 async with client.session_factory() as session:
                     document = await DocumentRepository(session).get_by_id(document_id)
+                    assert document is not None  # created earlier in this test
                     return document.status
 
             # embed() is called synchronously from INSIDE process_document's
@@ -144,15 +145,20 @@ def test_embedding_status_is_visible_while_embedding_runs(client):
 
 
 def test_document_status_endpoint_returns_error_message_on_failure(client):
+    # A document that fails during BACKGROUND ingestion despite a
+    # SUPPORTED, accepted content_type — a genuinely corrupt PDF is a
+    # realistic way for this to happen (unlike an unsupported content
+    # type, which is now rejected synchronously at upload time — see
+    # test_unsupported_content_type_is_rejected_at_upload_time below).
     headers = _auth_headers(client, email="ingest-user-failmsg@example.com")
     upload = client.post(
         "/documents",
         headers=headers,
         files={
             "file": (
-                "image.png",
-                io.BytesIO(b"not a real image"),
-                "image/png",
+                "notes.pdf",
+                io.BytesIO(b"not a real pdf"),
+                "application/pdf",
             )
         },
     )
@@ -164,9 +170,16 @@ def test_document_status_endpoint_returns_error_message_on_failure(client):
     assert body["error_message"]  # non-empty — the actual exception text
 
 
-def test_unsupported_content_type_marks_document_failed(client):
+def test_unsupported_content_type_is_rejected_at_upload_time(client):
+    # Security-hardening phase: an unsupported content_type is now
+    # rejected SYNCHRONOUSLY, at upload time (415) — the file is never
+    # stored, never queued for background processing at all. Before this
+    # phase, this exact request would have returned 202 and only failed
+    # minutes later in the background (see git history / the previous
+    # phase's write-up) — wasted storage and bandwidth for something
+    # rejectable in milliseconds.
     headers = _auth_headers(client, email="ingest-user3@example.com")
-    upload = client.post(
+    response = client.post(
         "/documents",
         headers=headers,
         files={
@@ -177,10 +190,10 @@ def test_unsupported_content_type_marks_document_failed(client):
             )
         },
     )
-    document_id = upload.json()["id"]
 
-    response = client.get(f"/documents/{document_id}", headers=headers)
-    assert response.json()["status"] == "failed"
+    assert response.status_code == 415
+    # Nothing was stored — no document exists to even look up.
+    assert client.get("/documents", headers=headers).json() == []
 
 
 def test_deleting_document_removes_its_vectors(client):

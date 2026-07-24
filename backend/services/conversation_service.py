@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Protocol
 
 from core.logging import logger
@@ -110,10 +110,18 @@ class ConversationService:
             )
             return conversation
 
-        conversation = await self.conversation_repository.get_by_id(conversation_id)
-        if conversation is None or conversation.user_id != owner_id:
+        # Explicitly annotated — without it, mypy infers this name's type
+        # from the `.create()` branch above (a bare `Conversation`, never
+        # None) and flags this second, genuinely-Optional assignment as
+        # incompatible. The two branches are mutually exclusive (this one
+        # is only reached when conversation_id was NOT None), but mypy
+        # doesn't know that from the variable name alone.
+        existing_conversation: Conversation | None = await self.conversation_repository.get_by_id(
+            conversation_id
+        )
+        if existing_conversation is None or existing_conversation.user_id != owner_id:
             raise ConversationNotFoundError(conversation_id)
-        return conversation
+        return existing_conversation
 
     async def append_message(
         self, *, conversation_id: uuid.UUID, role: str, content: str
@@ -142,7 +150,7 @@ class ConversationService:
             # re-saving the same value) is what actually marks the row
             # dirty for SQLAlchemy to emit an UPDATE.
             await self.conversation_repository.update(
-                conversation, updated_at=datetime.now(timezone.utc)
+                conversation, updated_at=datetime.now(UTC)
             )
         return message
 
