@@ -143,6 +143,7 @@ export function MessageList({
                   role={message.role}
                   content={message.content}
                   createdAt={message.createdAt}
+                  citations={message.citations}
                   showAvatar={groupStart}
                   showTimestamp={groupEnd}
                   isStreaming={message.id === streamingMessageId}

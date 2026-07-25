@@ -82,7 +82,7 @@ export function UploadDropzone({
         </button>
       </p>
       <p className="text-xs text-muted-foreground">
-        Markdown, PDF, Word, Excel, PowerPoint, or images — up to 20 MB each.
+        Text, Markdown, or PDF — up to 20 MB each.
       </p>
       <label className="sr-only" htmlFor="kb-upload-input">
         Choose files to upload

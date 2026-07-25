@@ -4,7 +4,7 @@ import { logger } from "@/lib/logger";
 import { ApiClient } from "./client";
 
 export { ApiClient };
-export type { ApiRequestOptions } from "./client";
+export type { ApiRequestOptions, UploadOptions } from "./client";
 export { ApiError, getFriendlyErrorMessage, normalizeError } from "./errors";
 export { clearAuthToken, getAuthToken, setAuthToken } from "./token";
 export type {

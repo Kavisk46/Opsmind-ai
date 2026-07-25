@@ -1,0 +1,91 @@
+name: CI
+
+# push: covers direct pushes/merges to main — catches an integration
+# problem even after review has already happened.
+# pull_request: runs on every PR targeting main, BEFORE merge — this is
+# what shows a red/green check on the PR itself and (once branch
+# protection requires it) blocks merging a broken PR at all.
+# Both together, not just one: push alone would only catch problems
+# after they're already on main; pull_request alone would miss anything
+# pushed directly to main without going through a PR.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  backend:
+    name: Backend (lint, type-check, test, build)
+    runs-on: ubuntu-latest
+
+    # Every `run:` step below executes from backend/ without needing a
+    # `cd backend &&` prefix repeated on each one.
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          # setup-python's own dependency cache — see this phase's
+          # write-up for exactly what this does and why it matters.
+          # Listing BOTH requirement files, not just requirements-dev.txt,
+          # is deliberate: requirements-dev.txt only REFERENCES
+          # requirements.txt via `-r requirements.txt`, and this cache
+          # key is computed from a hash of the literal file(s) listed
+          # here — it does not follow that reference on its own. Without
+          # requirements.txt listed explicitly too, a change to a
+          # production dependency with no matching requirements-dev.txt
+          # edit would silently keep serving a stale cache.
+          cache: "pip"
+          cache-dependency-path: |
+            backend/requirements.txt
+            backend/requirements-dev.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Run Ruff
+        run: ruff check .
+
+      - name: Run mypy
+        run: mypy .
+
+      - name: Scan dependencies for known vulnerabilities
+        # Verified directly during the security-hardening phase: this
+        # currently finds 28 real, known CVEs across pyjwt,
+        # python-multipart, starlette, and chromadb. Deliberately
+        # informational (continue-on-error), NOT build-blocking — most
+        # have a fix version available and should be upgraded
+        # deliberately (see this phase's security review), but
+        # chromadb's finding currently has NO fix version published at
+        # all. A BLOCKING scan would mean every future CI run fails
+        # until chromadb ships one — worse than the vulnerability
+        # itself, since it would silently train the team to ignore red
+        # CI rather than actually fixing anything. Visibility now,
+        # blocking once every current finding has a real fix path, is
+        # the realistic sequencing for this project's scope.
+        run: pip-audit --requirement requirements.txt
+        continue-on-error: true
+
+      - name: Run tests with coverage
+        run: |
+          pytest -q \
+            --cov=api --cov=core --cov=services \
+            --cov-report=term-missing \
+            --cov-report=xml
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: backend/coverage.xml
+
+      - name: Build backend Docker image
+        run: docker build -t opsmind-backend:${{ github.sha }} .

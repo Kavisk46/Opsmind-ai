@@ -6,7 +6,10 @@ import { MessageActions } from "./MessageActions";
 import { MessageAvatar } from "./MessageAvatar";
 import type { Message } from "./types";
 
-type MessageBubbleProps = Pick<Message, "role" | "content" | "createdAt"> & {
+type MessageBubbleProps = Pick<
+  Message,
+  "role" | "content" | "createdAt" | "citations"
+> & {
   showAvatar?: boolean;
   showTimestamp?: boolean;
   isStreaming?: boolean;
@@ -18,6 +21,7 @@ export function MessageBubble({
   role,
   content,
   createdAt,
+  citations,
   showAvatar = true,
   showTimestamp = true,
   isStreaming = false,
@@ -61,6 +65,18 @@ export function MessageBubble({
             <MarkdownRenderer content={content} />
           )}
         </div>
+        {!isStreaming && citations && citations.length > 0 && (
+          <p className="mt-1 max-w-full text-xs text-muted-foreground">
+            Sources:{" "}
+            {citations
+              .map((citation) =>
+                citation.pageNumber !== null
+                  ? `${citation.documentName} (p.${citation.pageNumber})`
+                  : citation.documentName
+              )
+              .join(", ")}
+          </p>
+        )}
         {showTimestamp && (
           <div
             className={cn(

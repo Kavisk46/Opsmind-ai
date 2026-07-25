@@ -6,10 +6,9 @@ import { getFriendlyErrorMessage, normalizeError } from "@/lib/api";
 import conversationData from "@/lib/mock-data/conversation.json";
 import { toast } from "@/lib/toast";
 
-import { sendChatMessage } from "./chat-api";
+import { createConversation, streamChatMessage } from "./chat-api";
 import { ChatInput } from "./ChatInput";
 import { MessageList } from "./MessageList";
-import { streamText } from "./stream-text";
 import type { Message } from "./types";
 
 const seedMessages = conversationData as Message[];
@@ -24,66 +23,108 @@ export function ChatWindow({ initialMessages = seedMessages }: ChatWindowProps) 
   const [streamingMessageId, setStreamingMessageId] = useState<string | null>(
     null
   );
-  const cancelStreamRef = useRef<(() => void) | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  // The real backend conversation this window is talking to — separate
+  // from AssistantConsole's mock sidebar `activeConversationId` (see
+  // AssistantConsole.tsx/ConversationList.tsx, both still driven by mock
+  // JSON, unchanged by this integration). Starts unset; the FIRST message
+  // sent in a mounted ChatWindow creates a real conversation via
+  // POST /conversations and every later message in this window (including
+  // regenerate) reuses that same id, which is what gives the backend the
+  // prior turns it needs to answer with conversation history.
+  const conversationIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     return () => {
-      cancelStreamRef.current?.();
+      abortControllerRef.current?.abort();
     };
   }, []);
 
-  // Shared by both a brand-new send and a regenerate: calls the mock API for
-  // a fresh reply, then streams it word-by-word into a target message.
-  // `existingMessageId` distinguishes the two cases — when set (regenerate),
-  // that message's content/timestamp are reset and reused as the streaming
-  // target instead of appending a new message.
+  // Shared by both a brand-new send and a regenerate: ensures a real
+  // backend conversation exists, then streams a fresh reply into it via
+  // POST /chat/stream. `existingMessageId` distinguishes the two cases —
+  // when set (regenerate), that message's content/citations are reset and
+  // reused as the streaming target instead of appending a new message.
   const beginStreamingReply = async (
     promptContent: string,
     existingMessageId?: string
   ) => {
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+    const targetId = existingMessageId ?? crypto.randomUUID();
+
     if (existingMessageId) {
       setMessages((prev) =>
         prev.map((existing) =>
           existing.id === existingMessageId
-            ? { ...existing, content: "", createdAt: new Date().toISOString() }
+            ? {
+                ...existing,
+                content: "",
+                citations: undefined,
+                createdAt: new Date().toISOString(),
+              }
             : existing
         )
       );
-      setStreamingMessageId(existingMessageId);
     } else {
       setIsLoading(true);
     }
 
     try {
-      const { message } = await sendChatMessage(promptContent);
-      const targetId = existingMessageId ?? message.id;
+      if (!conversationIdRef.current) {
+        const conversation = await createConversation({
+          signal: controller.signal,
+        });
+        conversationIdRef.current = conversation.id;
+      }
 
       if (!existingMessageId) {
         setIsLoading(false);
-        setMessages((prev) => [...prev, { ...message, content: "" }]);
-        setStreamingMessageId(targetId);
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: targetId,
+            role: "assistant",
+            content: "",
+            createdAt: new Date().toISOString(),
+          },
+        ]);
       }
+      setStreamingMessageId(targetId);
 
-      cancelStreamRef.current = streamText(
-        message.content,
-        (partial) => {
-          setMessages((prev) =>
-            prev.map((existing) =>
-              existing.id === targetId
-                ? { ...existing, content: partial }
-                : existing
-            )
-          );
+      await streamChatMessage(
+        { question: promptContent, conversationId: conversationIdRef.current },
+        {
+          onDelta: (delta) => {
+            setMessages((prev) =>
+              prev.map((existing) =>
+                existing.id === targetId
+                  ? { ...existing, content: existing.content + delta }
+                  : existing
+              )
+            );
+          },
+          onDone: ({ citations }) => {
+            setMessages((prev) =>
+              prev.map((existing) =>
+                existing.id === targetId ? { ...existing, citations } : existing
+              )
+            );
+          },
         },
-        () => {
-          setStreamingMessageId(null);
-          cancelStreamRef.current = null;
-        }
+        controller.signal
       );
     } catch (error) {
+      const apiError = normalizeError(error);
+      // An aborted request means the window unmounted or a new send
+      // superseded this one — not a real failure, so no error toast.
+      if (apiError.code !== "ABORTED") {
+        toast(getFriendlyErrorMessage(apiError));
+      }
+    } finally {
       setIsLoading(false);
       setStreamingMessageId(null);
-      toast(getFriendlyErrorMessage(normalizeError(error)));
+      abortControllerRef.current = null;
     }
   };
 

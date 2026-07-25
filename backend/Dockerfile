@@ -25,6 +25,19 @@ FROM python:3.12-slim AS runtime
 
 WORKDIR /app
 
+# PYTHONUNBUFFERED: without it, Python buffers stdout/stderr when they
+# aren't a real TTY — always true inside a container. Log lines can sit
+# in that buffer instead of reaching `docker logs`/the log collector in
+# real time, and are lost outright if the process is killed before the
+# buffer flushes. A real, common, easy-to-miss production gap — this
+# app's structured JSON logging (core/logging.py) is only as useful as
+# its timeliness.
+# PYTHONDONTWRITEBYTECODE: skips writing .pyc files into the image's
+# writable layer — no runtime behavior change, just avoids bytecode
+# nobody will reuse (the container is rebuilt from source every deploy).
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
 # A dedicated, unprivileged user — this process should never run as
 # root inside the container, even though the container is already
 # namespace-isolated from the host (defense in depth: a bug that lets

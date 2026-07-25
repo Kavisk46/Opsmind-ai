@@ -12,23 +12,26 @@ import {
 } from "react";
 
 import {
-  mockForgotPassword,
-  mockLogin,
-  mockResendOtp,
-  mockResendVerificationEmail,
-  mockResetPassword,
-  mockSignup,
-  mockVerifyEmail,
-  mockVerifyOtp,
+  forgotPassword as apiForgotPassword,
+  getCurrentUser,
+  login as apiLogin,
+  resendOtp as apiResendOtp,
+  resendVerificationEmail as apiResendVerificationEmail,
+  resetPassword as apiResetPassword,
+  signup as apiSignup,
+  verifyEmail as apiVerifyEmail,
+  verifyOtp as apiVerifyOtp,
   type ResetPasswordInput,
   type SignupInput,
-} from "@/components/Auth/auth-mock-api";
+} from "@/components/Auth/auth-api";
 import { GUEST_AUTH_TOKEN, GUEST_USER } from "@/components/Auth/guest-mode";
 import {
   clearSessionCookie,
+  getSessionCookie,
   setSessionCookie,
 } from "@/components/Auth/session-cookie";
 import type { AuthCredentials, AuthUser } from "@/components/Auth/types";
+import { apiClient } from "@/lib/api";
 import { clearAuthToken, setAuthToken } from "@/lib/api/token";
 import { isDev } from "@/lib/env";
 import { logger } from "@/lib/logger";
@@ -46,7 +49,7 @@ export type { AuthCredentials, AuthUser } from "@/components/Auth/types";
 export type {
   ResetPasswordInput,
   SignupInput,
-} from "@/components/Auth/auth-mock-api";
+} from "@/components/Auth/auth-api";
 
 export type AuthStatus = "loading" | "authenticated" | "unauthenticated";
 
@@ -59,13 +62,13 @@ export interface AuthContextValue {
   user: AuthUser | null;
   status: AuthStatus;
   // True only for the frontend-only Portfolio Demo Mode session (see
-  // guest-mode.ts) — never set for a real mockLogin()/mockVerifyOtp() user.
+  // guest-mode.ts) — never set for a real, backend-authenticated user.
   isGuest: boolean;
   login: (credentials: AuthCredentials) => Promise<LoginResult>;
   // Grants the same "authenticated" state as a real login, via the same
-  // session cookie and token slots, without touching auth-mock-api.ts —
-  // there's no account to look up, so this bypasses mockLogin() entirely
-  // rather than adding a fake credential pair to auth-users.json.
+  // session cookie and token slots, without calling the backend at all —
+  // there's no account to look up, so this bypasses POST /auth/login
+  // entirely rather than requiring a fake account server-side.
   loginAsGuest: () => Promise<void>;
   logout: () => Promise<void>;
   signup: (input: SignupInput) => Promise<void>;
@@ -83,30 +86,36 @@ interface AuthProviderProps {
   children: ReactNode;
 }
 
-// Placeholder boundary: swap the mock calls below for real auth
-// (NextAuth/Clerk/JWT) without touching useAuth() consumers — the shape of
-// this context is the actual integration point, not an implementation detail.
-// Known mock limitation: state is in-memory only, so a hard refresh resets
-// `status` to "unauthenticated" even though middleware.ts's session cookie
-// (and thus route access) persists — a real backend would rehydrate this
-// via a "whoami" call on mount instead.
+// Real backend integration point — connects to the FastAPI backend via
+// apiClient (src/lib/api), never a hardcoded URL (see
+// NEXT_PUBLIC_API_URL in src/lib/api/index.ts). The shape of this
+// context is what every consumer (LoginForm, SignupForm, RequireAuth,
+// ...) depends on; it hasn't changed, only what happens inside each
+// callback has.
+//
+// Session restoration: the in-memory token (lib/api/token.ts) is wiped
+// on every reload by design — session-cookie.ts's cookie is what
+// survives a reload and is used below to rehydrate it via a real
+// GET /users/me ("whoami") call, exactly as this file used to note as
+// the eventual real-backend behavior.
 export function AuthProvider({ children }: AuthProviderProps) {
   const router = useRouter();
   const pathname = usePathname();
   const [user, setUser] = useState<AuthUser | null>(null);
-  const [status, setStatus] = useState<AuthStatus>("unauthenticated");
+  // Starts "loading", not "unauthenticated" — RequireAuth.tsx already
+  // renders a full-screen loading fallback for any status other than
+  // "authenticated" without redirecting, so this was already the
+  // correct initial value for a status that has to be checked
+  // asynchronously; it just wasn't wired up to anything until now.
+  const [status, setStatus] = useState<AuthStatus>("loading");
   const [isGuest, setIsGuest] = useState(false);
 
   const login = useCallback(
     async (credentials: AuthCredentials): Promise<LoginResult> => {
-      const result = await mockLogin(credentials);
+      const result = await apiLogin(credentials);
 
-      if (result.outcome !== "authenticated") {
-        return { outcome: result.outcome, email: result.user.email };
-      }
-
-      setAuthToken(`mock-token-${result.user.id}`);
-      setSessionCookie();
+      setAuthToken(result.token);
+      setSessionCookie(result.token);
       setUser(result.user);
       setStatus("authenticated");
       setIsGuest(false);
@@ -121,10 +130,63 @@ export function AuthProvider({ children }: AuthProviderProps) {
   // slot in behind this same signature without changing any caller.
   const loginAsGuest = useCallback(async () => {
     setAuthToken(GUEST_AUTH_TOKEN);
-    setSessionCookie();
+    setSessionCookie(GUEST_AUTH_TOKEN);
     setUser(GUEST_USER);
     setStatus("authenticated");
     setIsGuest(true);
+  }, []);
+
+  // Session restoration on refresh — runs once, on mount, before the
+  // dev-auto-login effect below. Reads whatever token session-cookie.ts
+  // persisted across the reload (real user or guest) and rehydrates
+  // this component's in-memory state from it.
+  useEffect(() => {
+    let cancelled = false;
+
+    async function restoreSession() {
+      const token = getSessionCookie();
+
+      if (!token) {
+        if (!cancelled) setStatus("unauthenticated");
+        return;
+      }
+
+      // Guest mode's token never was, and never will be, a real JWT —
+      // checked first so restoring it doesn't waste a doomed API call
+      // against GET /users/me. Guest mode's own definition (guest-mode.ts)
+      // is untouched; this just correctly re-enters it after a refresh,
+      // which the in-memory-only mock could never do at all.
+      if (token === GUEST_AUTH_TOKEN) {
+        if (cancelled) return;
+        setAuthToken(GUEST_AUTH_TOKEN);
+        setUser(GUEST_USER);
+        setStatus("authenticated");
+        setIsGuest(true);
+        return;
+      }
+
+      try {
+        setAuthToken(token);
+        const restoredUser = await getCurrentUser();
+        if (cancelled) return;
+        setUser(restoredUser);
+        setStatus("authenticated");
+        setIsGuest(false);
+      } catch {
+        // Expired/invalid token, or the backend was unreachable —
+        // either way, fail closed: clear everything and land on
+        // "unauthenticated" rather than a half-authenticated state.
+        if (cancelled) return;
+        clearAuthToken();
+        clearSessionCookie();
+        setStatus("unauthenticated");
+      }
+    }
+
+    void restoreSession();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -167,40 +229,52 @@ export function AuthProvider({ children }: AuthProviderProps) {
     setIsGuest(false);
   }, []);
 
+  // Wires apiClient's existing (previously unused) onUnauthorized hook —
+  // fires whenever ANY request gets a 401 after retries/interceptors,
+  // e.g. a token that expires mid-session — so the app correctly falls
+  // back to "unauthenticated" everywhere, not just after an explicit
+  // logout() call. `logout` is a stable useCallback (empty deps), so
+  // this effect registers the handler exactly once.
+  useEffect(() => {
+    apiClient.onUnauthorized(() => {
+      void logout();
+    });
+  }, [logout]);
+
   const signup = useCallback(async (input: SignupInput) => {
-    await mockSignup(input);
+    await apiSignup(input);
   }, []);
 
   const forgotPassword = useCallback(async (email: string) => {
-    return mockForgotPassword(email);
+    return apiForgotPassword(email);
   }, []);
 
   const resetPassword = useCallback(async (input: ResetPasswordInput) => {
-    await mockResetPassword(input);
+    await apiResetPassword(input);
   }, []);
 
+  // No backend OTP endpoint exists (see auth-api.ts) — apiVerifyOtp()
+  // always throws, so nothing after that call ever runs. Left as a
+  // plain await (not restructured away) so VerifyOtpForm.tsx's existing
+  // try/catch keeps receiving a real Error with a clear message, exactly
+  // like every other TODO-stubbed function here.
   const verifyOtp = useCallback(
     async (input: { email: string; code: string }) => {
-      const authenticatedUser = await mockVerifyOtp(input);
-      setAuthToken(`mock-token-${authenticatedUser.id}`);
-      setSessionCookie();
-      setUser(authenticatedUser);
-      setStatus("authenticated");
-      setIsGuest(false);
+      await apiVerifyOtp(input);
     },
     []
   );
 
   const resendOtp = useCallback(async (email: string) => {
-    await mockResendOtp(email);
+    await apiResendOtp(email);
   }, []);
 
   const verifyEmail = useCallback(async (email: string) => {
-    await mockVerifyEmail(email);
+    await apiVerifyEmail(email);
   }, []);
 
   const resendVerificationEmail = useCallback(async (email: string) => {
-    await mockResendVerificationEmail(email);
+    await apiResendVerificationEmail(email);
   }, []);
 
   const value = useMemo<AuthContextValue>(

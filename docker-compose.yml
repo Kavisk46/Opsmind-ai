@@ -2,15 +2,37 @@ services:
   db:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: opsmind
-      POSTGRES_PASSWORD: opsmind
-      POSTGRES_DB: opsmind
+      POSTGRES_USER: ${POSTGRES_USER:-opsmind}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-opsmind}
+      POSTGRES_DB: ${POSTGRES_DB:-opsmind}
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    networks:
+      - opsmind-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U opsmind"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-opsmind}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Not yet used by the backend — core/config.py has no REDIS_URL
+  # setting, and main.py's lifespan still has only a placeholder comment
+  # for it ("Redis client connection (Phase: caching)"). Added here so
+  # the infrastructure exists ahead of the code that will consume it —
+  # a deliberate ordering (an idle service costs nothing at this scale),
+  # not a half-finished feature.
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - opsmind-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -19,11 +41,66 @@ services:
     build: ./backend
     ports:
       - "8000:8000"
+    env_file:
+      - .env
     environment:
-      DATABASE_URL: postgresql+asyncpg://opsmind:opsmind@db:5432/opsmind
+      # Deliberately set here, not left to .env — this MUST resolve to
+      # the `db` SERVICE NAME (Compose's internal DNS), never `localhost`
+      # (which inside this container would mean "the backend container
+      # itself"). backend/.env.example's DATABASE_URL uses `localhost`
+      # instead — correct for running the backend directly on the host,
+      # wrong here; this explicit override is what keeps the two from
+      # ever being confused for each other.
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-opsmind}:${POSTGRES_PASSWORD:-opsmind}@db:5432/${POSTGRES_DB:-opsmind}
+    volumes:
+      # Named volumes, not bind mounts — uploaded document bytes
+      # (storage/documents) and the ChromaDB index (storage/chroma) are
+      # both written by the backend at RUNTIME and must survive a
+      # `docker compose down`/rebuild. Without these two lines (a real
+      # gap in this file before this phase), every restart silently
+      # discarded every uploaded document and every embedded vector —
+      # the container's writable layer is thrown away with the
+      # container itself.
+      - backend_storage:/app/storage/documents
+      - backend_chroma:/app/storage/chroma
+    networks:
+      - opsmind-network
     depends_on:
       db:
         condition: service_healthy
 
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        # Baked into the client bundle at BUILD time (see
+        # frontend/Dockerfile's comment on NEXT_PUBLIC_* variables) —
+        # `localhost:8000` is correct here specifically because the
+        # BROWSER (not this container) is what actually calls it, and
+        # the browser runs on the host, where backend's port 8000 below
+        # is published to.
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+    ports:
+      - "3000:3000"
+    networks:
+      - opsmind-network
+    depends_on:
+      - backend
+
+networks:
+  # Explicit and named, rather than relying on Compose's implicit
+  # default network — every service above joins the SAME network, which
+  # is what lets `backend` resolve `db`/`redis` by service name at all
+  # (Compose's embedded DNS only resolves names within a shared
+  # network). Naming it explicitly is what would let a future service
+  # (e.g., an admin tool) join deliberately, or a future PUBLIC-facing
+  # service be kept OFF it, instead of everything implicitly sharing one
+  # unnamed network by default.
+  opsmind-network:
+    driver: bridge
+
 volumes:
   postgres_data:
+  redis_data:
+  backend_storage:
+  backend_chroma:

@@ -1,0 +1,12 @@
+node_modules
+.next
+.git
+.env*.local
+.env
+npm-debug.log*
+*.tsbuildinfo
+README.md
+AGENTS.md
+CLAUDE.md
+.vscode
+coverage

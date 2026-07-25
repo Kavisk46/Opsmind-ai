@@ -1,377 +1,231 @@
-# OpsMind AI
+# OpsMind
 
-OpsMind AI is a frontend application for an enterprise knowledge-intelligence workspace — a single place for teams to browse a document knowledge base, ask an AI assistant questions, monitor usage analytics, and manage account/organization settings.
+**A production-shaped, Retrieval-Augmented Generation (RAG) platform** — teams upload documents, an AI assistant answers questions grounded in that content with citations, and every layer of the system (API, database, AI pipeline, containers, CI, security) is built and tested to the standard of a real engineering team, not a tutorial project.
 
-This repository currently contains a **complete, production-shaped frontend** built with Next.js and React. It runs entirely against realistic mock data and simulated network latency, with a typed HTTP client, error boundaries, and a persistence layer already in place so a real backend can be integrated without restructuring the UI. A companion `backend/` directory exists as a scaffold (Dockerfile, dependency manifest, entry point) but is not yet implemented — see [Current Development Status](#current-development-status) below.
+OpsMind started as a frontend prototype and has since grown a complete, independently-designed backend: a real FastAPI service, a real RAG pipeline (embedding → vector search → prompt construction → LLM generation), a real Postgres schema with Alembic migrations, JWT authentication, Prometheus metrics, structured logging, Docker Compose orchestration, GitHub Actions CI, and a security-hardening pass — all backed by a **228-test suite** spanning unit, integration, API, database, and AI-pipeline layers.
 
-**The problem it addresses:** knowledge inside a growing team tends to fragment across documents, dashboards, and tools. OpsMind AI's frontend models a unified workspace where that content, an AI assistant, and operational analytics live behind one consistent, accessible interface.
+> **Where this project actually stands**, honestly: the backend, AI pipeline, and testing/CI/observability/security infrastructure below are real, working, and verified — every claim in this README was checked against the running code, not written speculatively. The frontend (see [`frontend/`](frontend/)) is a complete, production-shaped Next.js application currently running against **mock data**; wiring it to the real backend is the single highest-leverage remaining task (see [Roadmap](docs/roadmap.md)).
 
-**Target users:** the product is designed for knowledge workers and administrators at a mid-to-large organization — people who need to search internal documentation, ask an AI assistant about it, track platform usage, and manage team/organization settings.
-
-## Current Development Status
-
-| Layer | Status |
-| --- | --- |
-| Frontend UI/UX (all pages and flows described below) | **Implemented** |
-| Frontend data layer | Mock JSON fixtures + simulated network delay, not a real API |
-| AI Assistant responses | **Simulated** — canned replies via a local Next.js API route, not a real LLM |
-| Authentication | **Simulated** — in-memory mock session, not production-grade auth |
-| Backend service (`backend/`) | **Planned** — folder scaffolded, not implemented |
-| Automated tests | **Planned** — no test suite exists yet |
-| CI/CD | **Planned** — no pipeline configured yet |
-
-This project is best understood today as a fully interactive, accessibility-conscious frontend prototype/demo, engineered to production standards, awaiting a real backend.
+---
 
 ## Table of Contents
 
+- [Project Vision](#project-vision)
 - [Features](#features)
+- [Architecture Overview](#architecture-overview)
+- [The AI Pipeline](#the-ai-pipeline)
 - [Tech Stack](#tech-stack)
-- [Project Structure](#project-structure)
-- [Architecture](#architecture)
+- [Getting Started](#getting-started)
+- [Running with Docker](#running-with-docker)
+- [Testing](#testing)
+- [CI/CD](#cicd)
+- [Observability](#observability)
+- [Security](#security)
 - [Screenshots](#screenshots)
-- [Installation](#installation)
-- [Environment Variables](#environment-variables)
-- [Available Scripts](#available-scripts)
-- [Design Principles](#design-principles)
+- [Documentation](#documentation)
 - [Roadmap](#roadmap)
-- [Performance Considerations](#performance-considerations)
-- [Accessibility](#accessibility)
-- [Contributing](#contributing)
-- [License](#license)
 - [Author](#author)
 
 ---
 
+## Project Vision
+
+Knowledge inside a growing team fragments across documents nobody can search and dashboards nobody trusts. OpsMind is a single workspace where a team's documents, an AI assistant grounded in those documents, and operational visibility into the AI itself all live behind one API — built specifically to demonstrate **production AI-systems engineering**, not just "call an LLM API": token budgeting, retrieval evaluation, cost tracking, database integrity, and a real CI/CD pipeline are first-class parts of the project, not afterthoughts.
+
 ## Features
 
-### Dashboard — Implemented
+- **Retrieval-Augmented Generation chat** — ask a question, get an answer grounded in your own uploaded documents, with per-chunk citations (document name + page number where available).
+- **Document ingestion pipeline** — upload `.txt`/`.md`/`.pdf`, background-processed through extraction → chunking → embedding → vector indexing, with a pollable status endpoint (`uploaded → processing → embedding → ready`/`failed`).
+- **Conversation memory** — multi-turn chat with token-budgeted history (not just a message-count cap), backed by real `Conversation`/`Message` tables.
+- **Multi-provider LLM support** — local (free, no API key, CPU-friendly), OpenAI, Anthropic, and Ollama, swappable via one config value.
+- **JWT authentication + RBAC** — bcrypt password hashing, role-based access control (`member`/`manager`/`admin`), anti-enumeration error responses.
+- **AI observability** — token counts, estimated cost, retrieval quality (chunk count, confidence scores), and generation metadata tracked per request, exposed via Prometheus and an internal admin dashboard endpoint.
+- **Production hardening** — rate limiting, CORS, security headers, dependency vulnerability scanning, file-upload validation, a startup check that refuses to boot with an insecure default secret.
 
-A landing overview composed of a welcome banner, key stat cards, an AI assistant status chart, a team workspace panel, three usage/traffic charts, AI-generated insight cards, system health meters, server status cards, quick-action shortcuts, and a recent-activity feed. All data is sourced from static JSON fixtures and rendered behind a skeleton loading state.
+## Architecture Overview
 
-### Layout & Navigation — Implemented
+```mermaid
+graph TB
+    Client["Client (Frontend / API consumer)"]
 
-- Responsive application shell with a collapsible desktop sidebar (persisted across sessions) that becomes an off-canvas drawer on mobile, with grouped, individually-collapsible navigation sections and active-route highlighting.
-- Sticky top navbar with a notifications dropdown, theme toggle, and account menu.
-- Breadcrumb component for nested views.
-- Route-level Suspense loading UI, a custom 404 page, and route-level plus global error boundaries.
+    subgraph API["FastAPI Application"]
+        MW["Middleware — request ID, CORS,<br/>security headers, structured logging"]
+        Routes["Routes — auth, users, documents,<br/>chat, conversations, health, metrics"]
+        Services["Service Layer — business logic,<br/>orchestration, validation"]
+        Repos["Repository Layer — SQLAlchemy,<br/>parameterized queries"]
+    end
 
-### Theme Support — Implemented
+    DB[("PostgreSQL<br/>users · documents · conversations · messages")]
+    Vector[("ChromaDB<br/>embedded vector store")]
+    LLM["LLM Provider<br/>local / OpenAI / Anthropic / Ollama"]
+    Storage[("File Storage<br/>uploaded document bytes")]
+    Prom["Prometheus /metrics"]
 
-Light, dark, and system themes via `next-themes`, backed by a full light/dark design-token pair for every semantic color (background, foreground, card, popover, primary, secondary, muted, accent, destructive, success, warning, info).
+    Client -->|HTTPS/JSON| MW --> Routes --> Services
+    Services --> Repos --> DB
+    Services --> Vector
+    Services --> LLM
+    Services --> Storage
+    MW -.->|scraped| Prom
+```
 
-### Shared UI Components — Implemented
+The backend follows a strict layered architecture — **routes** translate HTTP to plain Python calls, **services** own business rules and are the only layer AI orchestration and cross-cutting logic live in, **repositories** own persistence and nothing else. Every dependency (database session, storage backend, embedding model, LLM provider) is injected via FastAPI's `Depends()`, which is what makes the 228-test suite possible without a real Postgres, real ChromaDB network calls, or a single real LLM API call anywhere in CI. See [`docs/backend-architecture.md`](docs/backend-architecture.md) for the full breakdown.
 
-A small design system under `src/components/ui/` (Button, Card, Badge, Avatar, Progress, Skeleton, Spinner, Switch, Table, LoadingFallback), built with `class-variance-authority` and a shared `cn()` class-merge utility, plus shared style constants (`FOCUS_RING_CLASS`, `POPOVER_PANEL_CLASS`, `POPOVER_ITEM_CLASS`) that keep focus rings and popover surfaces consistent everywhere they're used.
+## The AI Pipeline
 
-### AI Chat / Assistant — Implemented (simulated backend)
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant O as AIOrchestrator
+    participant R as RetrievalService
+    participant V as ChromaDB
+    participant P as PromptBuilder
+    participant L as LLM Provider
 
-A full chat interface: a searchable, pinnable conversation list; an auto-scrolling message list with a "jump to latest" affordance; markdown-rendered assistant messages with syntax-highlighted code blocks; message actions (copy, regenerate, like/dislike); and an auto-resizing input with a character limit. Responses are **not** generated by a real language model — `src/app/api/chat/route.ts` returns one of five fixed canned replies after an artificial delay, and the client reveals it word-by-word to simulate streaming.
+    U->>O: question + conversation history
+    O->>O: route (RAG vs. document-metadata question)
+    O->>R: retrieve(query, owner_id, top_k)
+    R->>V: embed query, similarity search
+    V-->>R: top-k chunks + confidence scores
+    R-->>O: RetrievedChunk[]
+    O->>P: build(question, context, history)
+    P-->>O: assembled prompt
+    O->>L: generate(prompt)
+    L-->>O: answer
+    O-->>U: answer + citations
+    Note over O: every stage timed and recorded —<br/>tokens, cost, retrieval quality, latency
+```
 
-### Knowledge Base / Document Library — Implemented (mock data)
-
-A nested, expandable folder tree; a searchable, filterable (category/tag), sortable document grid; favorites and recently-viewed views (persisted to local storage); a document viewer modal supporting markdown, image, and generic-file previews; and an upload modal with drag-and-drop, client-side file-type/size validation, and a simulated (non-networked) upload progress bar.
-
-### Analytics — Implemented (mock data)
-
-KPI summary cards; trend charts for query volume, response time, API requests, and top query categories; a resource-usage section (CPU, memory, network, storage); a top-documents card; and a filterable, sortable query log table — all switchable between 7-day and 30-day ranges. Charts are rendered with Recharts and each ships with an accessible tabular data fallback.
-
-### Settings — Implemented (mock persistence)
-
-Nine sections — Profile, Organization, Notifications, Appearance, API Keys, Security, Team, Billing, Audit Logs — each with its own form and mock-backed save flow that simulates network latency and occasionally fails, on purpose, to exercise the error-handling UI. The Appearance section's theme control is wired to the real `next-themes` provider; density is a preview-only preference.
-
-### Authentication — Implemented (simulated backend)
-
-Login, signup, forgot/reset password, OTP verification, and email-verification flows, plus social-login buttons (presentational only — no OAuth provider is wired up). Backed by an in-memory mock user store that resets on a full page reload, with a plain marker cookie (explicitly documented in code as not a real session token) used by route-protection middleware. A development-only auto-login shortcut is included to speed up local iteration and is disabled in production builds.
-
-### Accessibility — Implemented
-
-Skip-to-content links, extensive ARIA labeling, keyboard focus management (a shared focus-trap and modal-dismiss hook power every dropdown, drawer, and modal), heading-level-aware card titles to avoid skipping outline levels, and accessible tabular alternatives for every chart. See [Accessibility](#accessibility) for detail.
-
-### Responsive Design — Implemented
-
-A mobile-first layout with distinct behavior at each breakpoint: an off-canvas sidebar on small screens, a sticky always-visible sidebar from `md:` upward, and responsive grid layouts across the dashboard, analytics, and document views.
-
-### Planned Features
-
-- Real backend API integration
-- Real, model-backed AI Assistant responses
-- Production-grade authentication (persistent, verified sessions)
-- Real file upload and storage
-- Automated test coverage
-- CI/CD pipeline
-
----
+Every stage is independently unit-tested against fakes (`FakeEmbeddingModel`, `FakeVectorStore`, `FakeLLM`), plus a **golden regression dataset** (`tests/test_golden_retrieval.py`) that catches retrieval-quality regressions a plumbing test can't. See [`docs/ai-pipeline.md`](docs/ai-pipeline.md) for the full design, including why token budgeting, retrieval evaluation, and cost estimation are treated as core engineering, not extras.
 
 ## Tech Stack
 
-**Framework & Language**
-- [Next.js](https://nextjs.org/) 16.2.10 — App Router, Turbopack
-- [React](https://react.dev/) 19.2.4
-- [TypeScript](https://www.typescriptlang.org/) 5, strict mode
+**Backend**
+- [FastAPI](https://fastapi.tiangolo.com/) + [Uvicorn](https://www.uvicorn.org/) — async Python API
+- [SQLAlchemy 2.0](https://www.sqlalchemy.org/) (async) + [Alembic](https://alembic.sqlalchemy.org/) — ORM + migrations
+- [PostgreSQL](https://www.postgresql.org/) — primary datastore
+- [ChromaDB](https://www.trychroma.com/) — embedded vector store
+- [sentence-transformers](https://www.sbert.net/) — local embedding model
+- [PyJWT](https://pyjwt.readthedocs.io/) + [bcrypt](https://github.com/pyca/bcrypt) — auth
+- [Prometheus client](https://github.com/prometheus/client_python) — metrics
 
-**Styling & Design System**
-- [Tailwind CSS](https://tailwindcss.com/) v4, CSS-first configuration (no `tailwind.config.*` file — theme tokens live in `globals.css`)
-- [class-variance-authority](https://cva.style/) for component variants
-- `clsx` + `tailwind-merge` for class composition
-- [shadcn/ui](https://ui.shadcn.com/) tooling conventions (`components.json`, "new-york" style, neutral base palette) as the basis for the hand-built component primitives
-- [Lucide React](https://lucide.dev/) for icons
-- [next-themes](https://github.com/pacocoursey/next-themes) for light/dark/system theming
+**AI**
+- Local HuggingFace model (free, default) — [OpenAI](https://platform.openai.com/) / [Anthropic](https://www.anthropic.com/) / [Ollama](https://ollama.com/) supported via one config switch
 
-**State & Data**
-- [Zustand](https://zustand-demo.pmnd.rs/) for global client state (sidebar, modal, theme intent, UI flags)
-- [TanStack React Query](https://tanstack.com/query) provider is configured (with devtools in development) as the app's data-fetching/caching foundation, though no feature currently issues live queries through it
-- A hand-written, typed `ApiClient` (`src/lib/api/`) with retry, interceptor, and structured-error handling, ready for real backend integration
+**Testing & Quality**
+- [pytest](https://pytest.org/) + [pytest-cov](https://pytest-cov.readthedocs.io/) — 228 tests across unit/integration/API/DB/AI-pipeline layers
+- [Ruff](https://docs.astral.sh/ruff/) + [mypy](https://mypy-lang.org/) — lint + static typing
+- [Locust](https://locust.io/) — load/stress/spike testing
+- [pip-audit](https://pypi.org/project/pip-audit/) — dependency vulnerability scanning
 
-**Forms & Validation**
-- [React Hook Form](https://react-hook-form.com/)
-- [Zod](https://zod.dev/) schemas via `@hookform/resolvers`
+**Infrastructure**
+- [Docker](https://www.docker.com/) (multi-stage builds) + [Docker Compose](https://docs.docker.com/compose/) — backend, frontend, Postgres, Redis (provisioned ahead of use)
+- [GitHub Actions](https://github.com/features/actions) — CI: lint → type-check → security scan → test+coverage → Docker build
 
-**Content Rendering**
-- [react-markdown](https://github.com/remarkjs/react-markdown) with `remark-gfm`
-- [react-syntax-highlighter](https://github.com/react-syntax-highlighter/react-syntax-highlighter) (Prism) for fenced code blocks
+**Frontend** *(complete, currently running against mock data — see [`frontend/README.md`](frontend/) for its own full documentation)*
+- [Next.js](https://nextjs.org/) 16 (App Router) + [React](https://react.dev/) 19 + [TypeScript](https://www.typescriptlang.org/) (strict)
+- [Tailwind CSS](https://tailwindcss.com/) v4, [Zustand](https://zustand-demo.pmnd.rs/), [TanStack Query](https://tanstack.com/query), [React Hook Form](https://react-hook-form.com/) + [Zod](https://zod.dev/)
 
-**Data Visualization**
-- [Recharts](https://recharts.org/)
+## Getting Started
 
-**Feedback & Utilities**
-- [Sonner](https://sonner.emilkowal.ski/) for toast notifications
-
-**Tooling**
-- ESLint 9 (flat config), `eslint-config-next` (Core Web Vitals + accessibility rules via `jsx-a11y`), `eslint-plugin-import`
-- Prettier
-
----
-
-## Project Structure
-
-### Repository Layout
-
-```
-Opsmind-ai/
-├── frontend/     Next.js application (implemented — this is the focus of this README)
-├── backend/      Scaffolded Python service (Dockerfile, requirements.txt, entry point — not yet implemented)
-├── docs/         Documentation placeholders (currently empty)
-└── LICENSE       MIT License
-```
-
-### `frontend/src`
-
-```
-src/
-├── app/                     Next.js App Router routes
-│   ├── (app)/                Authenticated shell: dashboard, assistant, documents, analytics, settings
-│   ├── (auth)/                Public flows: login, signup, password reset, OTP/email verification
-│   ├── api/chat/               Mock chat API route
-│   ├── layout.tsx, error.tsx, global-error.tsx, loading.tsx, not-found.tsx
-│   └── robots.ts, sitemap.ts, opengraph-image.tsx, twitter-image.tsx
-├── components/              UI, organized by feature
-│   ├── ui/                   Design-system primitives (Button, Card, Badge, Avatar, ...)
-│   ├── Dashboard/, Analytics/, Chat/, KnowledgeBase/, Settings/, Auth/   Feature modules
-│   ├── Sidebar/, Navbar/, Breadcrumb/, ThemeToggle/, NotificationButton/,
-│   │   UserProfileDropdown/    Application chrome
-│   └── Providers/             App-wide context (Auth, Query, Theme, Error Boundary)
-├── hooks/                   Shared hooks (disclosure, focus trap, modal dismiss, clipboard, simulated load)
-├── lib/                     Framework-agnostic utilities
-│   ├── api/                   Typed HTTP client, retry/interceptor/error handling
-│   ├── forms/                  react-hook-form + zod integration helpers
-│   ├── mock-data/               Static JSON fixtures powering every feature today
-│   └── utils.ts, format.ts, validation.ts, logger.ts, env.ts, ...
-├── store/                   Global Zustand stores
-└── proxy.ts                  Route-protection middleware (Next.js 16's "proxy" convention)
-```
-
-Types are colocated with the feature that owns them (e.g. `components/Chat/types.ts`) rather than centralized in a single `types/` directory, since most types describe UI/domain shapes specific to one feature.
-
----
-
-## Architecture
-
-**Next.js App Router.** Routes are organized into two route groups — `(app)` for the authenticated product shell and `(auth)` for pre-session flows — each with its own layout, so the authenticated chrome (sidebar/navbar) is never rendered on auth pages. Route-level `loading.tsx` and `error.tsx`/`global-error.tsx` give every navigation a consistent Suspense fallback and failure boundary without each page reimplementing one.
-
-**Feature-based component organization.** Components live under `src/components/<Feature>/` alongside the hooks, types, and mock-data wiring that feature needs, rather than in generic `pages`/`containers` buckets. This keeps related code physically close and makes each feature's boundaries explicit, while genuinely shared pieces (the `ui/` primitives, `Providers/`, `Sidebar/`, `Navbar/`) live at the top level.
-
-**Shared UI components as the single source of interaction truth.** Buttons, focus rings, and popover surfaces are defined once (`buttonVariants`, `FOCUS_RING_CLASS`, `POPOVER_PANEL_CLASS`, `POPOVER_ITEM_CLASS`) and composed everywhere else via `cn()`, so visual and behavioral consistency (hover states, transitions, focus outlines) doesn't have to be re-derived per component.
-
-**State management split by scope.** Ephemeral, cross-cutting UI state (sidebar open/collapsed, active modal) lives in small, single-purpose Zustand stores — three of which persist to `localStorage` (sidebar collapse state, favorited documents, recently-viewed documents) via Zustand's `persist` middleware. Feature-local state (form state, filters, search query) stays in component state via React Hook Form or plain `useState`, avoiding a single oversized global store.
-
-**Design tokens over hardcoded values.** Every color, radius, shadow, spacing, animation duration, and z-index value used across the app is defined once in `globals.css` (via Tailwind v4's CSS-first `@theme` blocks, plus plain custom properties for the scales — z-index and motion duration — that Tailwind v4 has no built-in namespace for) and consumed through Tailwind utility classes, so a token change propagates everywhere automatically instead of requiring a find-and-replace.
-
-**A mock service layer shaped like a real one.** Every feature's "backend" (auth, chat, settings persistence, file upload) is implemented as an async function with artificial latency and, in some cases, randomized failure — matching the shape (promises, delays, error paths) that a real API integration would have, so swapping mock functions for real `fetch` calls through the existing typed `ApiClient` should not require UI changes.
-
-**Type safety end-to-end.** TypeScript runs in `strict` mode with `noUncheckedIndexedAccess` enabled, and the codebase has zero `any`/`as any` escape hatches. Form schemas are defined once with Zod and drive both runtime validation and inferred TypeScript types via `@hookform/resolvers`.
-
-**Accessibility as a default, not an add-on.** Interactive primitives (dropdowns, modals, drawers) share one focus-trap and dismiss-on-Escape implementation rather than each rolling its own, and `eslint-config-next`'s bundled `jsx-a11y` rules run on every lint pass.
-
-**Responsive design as a layout strategy, not a per-page afterthought.** The sidebar's mobile/desktop split, and the grid layouts across Dashboard, Analytics, and the document library, are built from the same Tailwind breakpoint scale throughout, so the app's structural behavior at each screen size is consistent rather than page-specific.
-
----
-
-## Screenshots
-
-### Dashboard
-
-![Dashboard](docs/images/dashboard.png)
-
-### AI Assistant
-
-![Assistant](docs/images/assistant.png)
-
-### Analytics
-![Analytics](docs/images/analytics.png)
-
-### Settings
-
-![Settings](docs/images/settings.png)
-
-
----
-
-## Installation
-
-The application lives in the `frontend/` directory.
+**Prerequisites:** Python 3.12+, PostgreSQL 16 (or use Docker — see below), Node.js 20+ (for the frontend).
 
 ```bash
 git clone https://github.com/Kavisk46/Opsmind-ai.git
-cd Opsmind-ai/frontend
+cd Opsmind-ai/backend
 
-npm install
+python -m venv .venv
+.venv/Scripts/activate        # Windows; use `source .venv/bin/activate` on macOS/Linux
 
-npm run dev
+pip install -r requirements-dev.txt   # includes production deps + test/lint tooling
+cp .env.example .env                  # edit DATABASE_URL if not using Docker's default
+
+alembic upgrade head                  # apply database migrations
+uvicorn main:app --reload             # http://localhost:8000
 ```
 
-The app runs at [http://localhost:3000](http://localhost:3000) by default.
+Interactive API docs (Swagger UI) are automatically available at `http://localhost:8000/docs` once running.
 
-For a production build:
+## Running with Docker
+
+The whole stack — backend, frontend, Postgres, Redis (provisioned ahead of the caching feature that will use it) — via one command from the repository root:
 
 ```bash
-npm run build
-npm run start
+cp .env.example .env      # review/override defaults, especially SECRET_KEY
+docker compose build
+docker compose up
 ```
 
-To lint the codebase:
+Backend: `http://localhost:8000` · Frontend: `http://localhost:3000` · Postgres: `localhost:5432`
+
+Both `backend/Dockerfile` and `frontend/Dockerfile` are multi-stage builds (dependency-install stage discarded from the final image, non-root user, health checks against real endpoints). See [`docs/deployment.md`](docs/deployment.md) for what each instruction does and why.
+
+## Testing
 
 ```bash
-npm run lint
+cd backend
+pytest -q                                                       # all 228 tests
+pytest --cov=api --cov=core --cov=services --cov-report=term-missing   # with coverage
 ```
 
----
+Tests are layered deliberately, not incidentally:
 
-## Environment Variables
+| Layer | What it proves | Real infra involved |
+|---|---|---|
+| Unit (services, AI pipeline) | Business logic, in isolation, via fakes | None |
+| Repository / DB integration | Real constraints, cascades, transactions | SQLite (swapped in for tests) |
+| API | Full request/response cycle, auth, validation | FastAPI TestClient |
+| Golden retrieval | Retrieval doesn't silently regress | Real embedded ChromaDB |
 
-Create a `frontend/.env.local` file if you want to override the defaults (see `frontend/.env.example`):
+Full breakdown, including *why* each layer exists and what it specifically catches that the others can't, in [`docs/testing.md`](docs/testing.md).
 
-| Variable | Required | Default (dev) | Purpose |
-| --- | --- | --- | --- |
-| `NEXT_PUBLIC_APP_URL` | Recommended for production | `http://localhost:3000` | Base URL used to resolve absolute URLs for Open Graph/Twitter metadata, the canonical link, and the generated `robots.txt`/`sitemap.xml`. |
-| `NEXT_PUBLIC_API_URL` | Recommended for production | `http://localhost:8000` | Base URL for the typed `ApiClient` that a real backend integration would use. Not currently consumed by any live network call — all current data is mock-backed. |
+## CI/CD
 
-Neither variable is required to run the app locally; both fall back to sensible development defaults and only log a warning if left unset in a production build.
+Every push and pull request against `main` runs, in order: **Ruff → mypy → dependency vulnerability scan → pytest with coverage → Docker build** (`.github/workflows/ci.yml`) — fail-fast, cached dependencies, coverage uploaded as a build artifact. See [`docs/deployment.md`](docs/deployment.md#cicd).
 
----
+## Observability
 
-## Available Scripts
+Every request is logged as structured JSON (request ID, method, path, status, duration) and every AI call is tracked separately (provider, model, tokens, estimated cost, retrieval chunk count/confidence) — exposed both as Prometheus metrics (`GET /metrics`) and a human-readable admin summary (`GET /internal/ai-metrics`, admin-only). `GET /health` and `GET /health/ready` distinguish liveness from real dependency readiness.
 
-| Script | Description |
-| --- | --- |
-| `npm run dev` | Starts the Next.js development server (Turbopack) at `http://localhost:3000`. |
-| `npm run build` | Creates an optimized production build. |
-| `npm run start` | Serves the production build created by `npm run build`. |
-| `npm run lint` | Runs ESLint across the project. |
-| `npm run format` | Formats the codebase with Prettier. |
-| `npm run format:check` | Checks formatting without writing changes. |
+## Security
 
-No test script is defined in `package.json` — see [Roadmap](#roadmap).
+JWT auth with bcrypt hashing, role-based access control, CORS restricted to a real allowlist (never a wildcard), rate limiting on login and signup, file-upload content-type validation, security headers, a startup check that refuses to run with the default secret key outside development, and automated dependency vulnerability scanning in CI. Full security review and production checklist in [`docs/security.md`](docs/security.md).
 
----
+## Screenshots
 
-## Design Principles
+The frontend (complete, mock-data-backed today):
 
-- **Scalability.** Feature-based folders and single-purpose Zustand stores mean new features add a folder and, at most, a small store — not changes scattered across a shared global state file.
-- **Reusability.** Shared style constants and `ui/` primitives are the default building blocks; feature components compose them rather than redefining focus rings, popover surfaces, or button styles locally.
-- **Accessibility.** Keyboard focus management, ARIA labeling, and semantic heading levels are implemented once in shared hooks/components and inherited everywhere, rather than being a per-component responsibility.
-- **Type Safety.** Strict TypeScript, Zod-validated forms, and a typed HTTP client remove an entire class of runtime errors before they reach the browser.
-- **Maintainability.** Design tokens centralize visual decisions; mock-service functions are isolated behind plain async function signatures so they can be swapped for real API calls without touching component code.
-- **Responsive Design.** Every layout is built mobile-first against a single shared breakpoint scale, rather than per-page custom breakpoints.
-- **Clean Architecture / Separation of Concerns.** Routing (`app/`), presentation (`components/`), state (`store/`), and framework-agnostic logic (`lib/`) are kept in distinct layers, each with a narrow responsibility.
+| Dashboard | AI Assistant |
+|---|---|
+| ![Dashboard](docs/images/dashboard.png) | ![Assistant](docs/images/assistant.png) |
 
----
+| Analytics | Settings |
+|---|---|
+| ![Analytics](docs/images/analytics.png) | ![Settings](docs/images/settings.png) |
+
+*Backend visuals — Swagger UI (`/docs`), a real `/chat` request/response, and the Prometheus metrics output — are straightforward to capture from a running instance and are the natural next addition here.*
+
+## Documentation
+
+| Doc | Covers |
+|---|---|
+| [`docs/architecture.md`](docs/architecture.md) | System, request-flow, and deployment diagrams |
+| [`docs/backend-architecture.md`](docs/backend-architecture.md) | Layering, dependency injection, why each layer exists |
+| [`docs/ai-pipeline.md`](docs/ai-pipeline.md) | Embedding → retrieval → prompt → generation, in depth |
+| [`docs/api.md`](docs/api.md) | Full REST API reference |
+| [`docs/deployment.md`](docs/deployment.md) | Docker, Compose, CI/CD |
+| [`docs/testing.md`](docs/testing.md) | Testing strategy and how to run each layer |
+| [`docs/security.md`](docs/security.md) | Security review and production checklist |
+| [`docs/roadmap.md`](docs/roadmap.md) | What's done, what's next, honestly |
+| [`docs/portfolio.md`](docs/portfolio.md) | Demo script, resume/portfolio blurbs, interview talking points |
 
 ## Roadmap
 
-- [x] Dashboard with mock analytics widgets
-- [x] Responsive, collapsible sidebar navigation
-- [x] Sticky navbar with notifications, theme toggle, and account menu
-- [x] Light / dark / system theme support
-- [x] Knowledge base with folders, search, filters, tagging, and a document viewer
-- [x] Simulated file upload flow with client-side validation
-- [x] Analytics dashboards with interactive charts and an accessible data-table fallback
-- [x] Settings workspace (9 sections)
-- [x] Authentication flows backed by a mock session
-- [x] AI Assistant chat interface with simulated streaming responses
-- [x] Shared design system and reusable UI primitives
-- [x] SEO metadata, Open Graph/Twitter image generation, `robots.txt`, `sitemap.xml`
-- [x] Global and route-level error boundaries, custom 404 page
-- [ ] Real backend API
-- [ ] Real, model-backed AI Assistant
-- [ ] Production-grade authentication (persistent, verified sessions)
-- [ ] Real file upload and storage
-- [ ] Automated test suite (unit/integration/e2e)
-- [ ] CI/CD pipeline
-
----
-
-## Performance Considerations
-
-- **Code splitting via `next/dynamic`.** Chart-heavy sections (the Dashboard's AI status chart and analytics-chart grid, and the full Analytics page's trend charts) and the syntax-highlighted code-block renderer are dynamically imported, so their bundle weight (Recharts, `react-syntax-highlighter`) is only paid when those views actually render. The React Query devtools are dynamically imported and excluded from production entirely.
-- **Selective memoization.** `React.memo` wraps components that would otherwise re-render on every parent update for no visual change (`MarkdownRenderer` during chat streaming, `SettingsContent`, `TopDocumentsCard`, `QueryLogSection`). `useMemo`/`useCallback` are used where derived values are non-trivial to recompute (folder-tree construction, filtered/sorted document and conversation lists) or where stable function identity matters (the auth provider's exposed actions).
-- **Suspense-driven route loading.** A route-level `loading.tsx` provides an immediate loading UI during navigation instead of a blank screen.
-- **Skeleton loading states.** Every data-bearing feature (Dashboard, Settings, Analytics, Knowledge Base) renders a matching skeleton while its simulated load completes, avoiding layout shift once real content appears.
-- **Server Components by default.** Route-level `page.tsx` files are Server Components; `"use client"` is pushed down to the leaf components that actually need interactivity or browser APIs, rather than applied at the page level.
-
----
-
-## Accessibility
-
-- **Skip-to-content links** on both the authenticated app shell and the auth layout, for keyboard and screen-reader users to bypass repeated navigation.
-- **Focus management.** A shared `useModalDismiss` hook (built on a shared `trapTabFocus` utility) drives every modal, drawer, and mobile navigation panel: it moves focus to the panel on open, traps Tab/Shift+Tab within it, closes on Escape, and restores body scroll on close.
-- **Consistent, visible focus indicators** via a shared `FOCUS_RING_CLASS` applied to every interactive element that doesn't already go through the shared `Button` component.
-- **Semantic heading structure.** The shared `CardTitle` component accepts an explicit heading level so a card's title never skips or duplicates a heading level in the page outline.
-- **ARIA labeling** throughout interactive components — icon-only buttons, dropdown triggers, live regions for loading/status states, and modal dialogs are labeled for assistive technology.
-- **Accessible data alternatives for charts.** Every chart ships with an `AccessibleDataTable` presenting the same data in tabular form.
-- **Reduced-motion support** on key animated surfaces (popovers, the toggle switch, the chat message list) via `motion-reduce:` variants.
-- **Linted for accessibility.** `eslint-config-next`'s Core Web Vitals configuration includes `jsx-a11y` rules, enforced on every lint run.
-
----
-
-## Contributing
-
-Contributions are welcome. Before opening a pull request:
-
-1. **Fork the repository** and create a feature branch from `main`.
-2. **Follow the existing conventions** — feature-based component organization, shared `ui/` primitives over one-off styling, and the existing TypeScript strictness (no `any`).
-3. **Run the checks locally** before submitting:
-   ```bash
-   npm run lint
-   npm run format:check
-   npm run build
-   ```
-4. **Write clear commit messages** describing the *why*, not just the *what*.
-5. **Open a pull request** with a description of the change, the motivation behind it, and any relevant screenshots for UI changes.
-6. **Be responsive to review feedback** — this project values incremental, well-scoped changes over large, sweeping ones.
-
-If you're proposing a larger change (e.g. real backend integration, a new top-level feature), please open an issue to discuss the approach first.
-
----
-
-## License
-
-This project is licensed under the **MIT License** — see the [LICENSE](./LICENSE) file for details.
-
----
+Highest-impact next step: **wire the frontend to the real backend** (the typed `ApiClient` and mock-service boundary were built for exactly this swap). Full roadmap, including what's genuinely done vs. planned, in [`docs/roadmap.md`](docs/roadmap.md).
 
 ## Author
 
-**[Kavimugil SK]**
+**Kavimugil SK**
+[LinkedIn](https://www.linkedin.com/in/kavimugil-sk) · [skkavi4618@gmail.com](mailto:skkavi4618@gmail.com)
 
-- Linkedin : [www.linkedin.com/in/kavimugil-sk]
-- Email: [skkavi4618@gmail.com]
+Licensed under the [MIT License](./LICENSE).
