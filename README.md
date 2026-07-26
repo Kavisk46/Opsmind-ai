@@ -4,7 +4,7 @@
 
 OpsMind started as a frontend prototype and has since grown a complete, independently-designed backend: a real FastAPI service, a real RAG pipeline (embedding → vector search → prompt construction → LLM generation), a real Postgres schema with Alembic migrations, JWT authentication, Prometheus metrics, structured logging, Docker Compose orchestration, GitHub Actions CI, and a security-hardening pass — all backed by a **228-test suite** spanning unit, integration, API, database, and AI-pipeline layers.
 
-> **Where this project actually stands**, honestly: the backend, AI pipeline, and testing/CI/observability/security infrastructure below are real, working, and verified — every claim in this README was checked against the running code, not written speculatively. The frontend (see [`frontend/`](frontend/)) is a complete, production-shaped Next.js application currently running against **mock data**; wiring it to the real backend is the single highest-leverage remaining task (see [Roadmap](docs/roadmap.md)).
+> **Where this project actually stands**, honestly: the backend, AI pipeline, and testing/CI/observability/security infrastructure below are real, working, and verified — every claim in this README was checked against the running code, not written speculatively. The frontend (see [`frontend/`](frontend/)) is now genuinely wired to this backend for its core flows — authentication (real JWT login/signup/session-restore), AI chat (real streaming, conversation history, citations, persistence), and documents (real multipart upload with progress/retry, listing, delete) all call the live API via a typed `ApiClient`, cached through TanStack Query. What's still mock, stated precisely rather than glossed over: most Dashboard widgets (team/AI-status/server-status cards with no backend equivalent), most Analytics trend charts (no time-series data exists in the backend today), the Knowledge Base's folder/category/tag browser, Notifications, and every Settings page. See [Roadmap](docs/roadmap.md) for the exact remaining list.
 
 ---
 
@@ -122,9 +122,9 @@ Every stage is independently unit-tested against fakes (`FakeEmbeddingModel`, `F
 - [Docker](https://www.docker.com/) (multi-stage builds) + [Docker Compose](https://docs.docker.com/compose/) — backend, frontend, Postgres, Redis (provisioned ahead of use)
 - [GitHub Actions](https://github.com/features/actions) — CI: lint → type-check → security scan → test+coverage → Docker build
 
-**Frontend** *(complete, currently running against mock data — see [`frontend/README.md`](frontend/) for its own full documentation)*
-- [Next.js](https://nextjs.org/) 16 (App Router) + [React](https://react.dev/) 19 + [TypeScript](https://www.typescriptlang.org/) (strict)
-- [Tailwind CSS](https://tailwindcss.com/) v4, [Zustand](https://zustand-demo.pmnd.rs/), [TanStack Query](https://tanstack.com/query), [React Hook Form](https://react-hook-form.com/) + [Zod](https://zod.dev/)
+**Frontend** *(core flows wired to this real backend; remaining mock surface documented in [Roadmap](docs/roadmap.md) — see [`frontend/README.md`](frontend/) for its own full documentation)*
+- [Next.js](https://nextjs.org/) 16 (App Router) + [React](https://react.dev/) 19 + [TypeScript](https://www.typescriptlang.org/) (strict, `noUncheckedIndexedAccess`, zero `any`)
+- [Tailwind CSS](https://tailwindcss.com/) v4, [Zustand](https://zustand-demo.pmnd.rs/), [TanStack Query](https://tanstack.com/query) (real request caching/dedup across the dashboard, documents, and conversations), [React Hook Form](https://react-hook-form.com/) + [Zod](https://zod.dev/)
 
 ## Getting Started
 
@@ -193,7 +193,7 @@ JWT auth with bcrypt hashing, role-based access control, CORS restricted to a re
 
 ## Screenshots
 
-The frontend (complete, mock-data-backed today):
+The frontend (core flows now backed by the real API — see the callout at the top of this README for exactly which surfaces still show mock data):
 
 | Dashboard | AI Assistant |
 |---|---|
@@ -221,7 +221,7 @@ The frontend (complete, mock-data-backed today):
 
 ## Roadmap
 
-Highest-impact next step: **wire the frontend to the real backend** (the typed `ApiClient` and mock-service boundary were built for exactly this swap). Full roadmap, including what's genuinely done vs. planned, in [`docs/roadmap.md`](docs/roadmap.md).
+Highest-impact next step: give a real user a path to the `admin` role — the RBAC-gated Analytics feature is otherwise unreachable through any signup flow today. Full roadmap, including what's genuinely done vs. planned, in [`docs/roadmap.md`](docs/roadmap.md).
 
 ## Author
 

@@ -1,6 +1,6 @@
 // Canonical shapes shared between AuthProvider.tsx (the public useAuth() API)
-// and auth-mock-api.ts (the mock backend layer) — kept here so neither file
-// has to redeclare the other's types.
+// and auth-api.ts (the real backend layer) — kept here so neither file has
+// to redeclare the other's types.
 export interface AuthUser {
   id: string;
   name: string;

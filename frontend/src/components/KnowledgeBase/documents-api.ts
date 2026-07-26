@@ -1,3 +1,5 @@
+import { useQuery } from "@tanstack/react-query";
+
 import { apiClient, type UploadOptions } from "@/lib/api";
 
 // Wire shape verified directly against backend/schemas/document.py — never
@@ -70,6 +72,20 @@ export async function listDocuments(options?: {
   return documents
     .map(toUploadedDocument)
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+// Shared React Query key — StatsCards.tsx (Dashboard) and UploadModal.tsx
+// both need the real document list; using the same key means the second
+// one to mount gets an instant cache hit instead of a redundant
+// GET /documents, and invalidating this key after an upload/delete keeps
+// BOTH in sync without either needing to know the other exists.
+export const DOCUMENTS_QUERY_KEY = ["documents"] as const;
+
+export function useDocuments() {
+  return useQuery({
+    queryKey: DOCUMENTS_QUERY_KEY,
+    queryFn: ({ signal }) => listDocuments({ signal }),
+  });
 }
 
 // DELETE /documents/{id} — 204 No Content on success; a 404 (already

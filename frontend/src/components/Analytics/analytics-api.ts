@@ -1,4 +1,6 @@
-import { apiClient } from "@/lib/api";
+import { useQuery } from "@tanstack/react-query";
+
+import { apiClient, ApiError } from "@/lib/api";
 
 // Wire shape verified directly against
 // backend/services/ai_metrics_service.py's AIMetricsService.summary() —
@@ -76,4 +78,22 @@ export async function getAiMetricsSummary(options?: {
     { signal: options?.signal }
   );
   return toAiMetricsSummary(summary);
+}
+
+// Shared React Query key — StatsCards.tsx and AnalyticsKpiCards.tsx both
+// need this exact summary; using the same key means the second component
+// to mount gets an instant cache hit instead of a second, redundant
+// network request to the same admin-gated endpoint.
+export const AI_METRICS_SUMMARY_QUERY_KEY = ["ai-metrics-summary"] as const;
+
+export function useAiMetricsSummary() {
+  return useQuery({
+    queryKey: AI_METRICS_SUMMARY_QUERY_KEY,
+    queryFn: ({ signal }) => getAiMetricsSummary({ signal }),
+    // A 403 (non-admin) is a real, permanent answer, not a transient
+    // failure — retrying it five times (react-query's default) would
+    // just hammer the endpoint for the same guaranteed result.
+    retry: (failureCount, error) =>
+      !(error instanceof ApiError && error.status === 403) && failureCount < 1,
+  });
 }

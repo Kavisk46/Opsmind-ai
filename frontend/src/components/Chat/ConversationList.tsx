@@ -12,9 +12,10 @@ import type { Conversation } from "./types";
 
 interface ConversationListProps {
   conversations: Conversation[];
-  activeConversationId: string;
+  activeConversationId: string | null;
   onSelectConversation: (id: string) => void;
   onNewChat: () => void;
+  onDeleteConversation: (id: string) => void;
   // Provided only by the mobile modal instance — its presence is what
   // turns on the close button, Escape-to-close, and body-scroll lock.
   onClose?: () => void;
@@ -25,6 +26,7 @@ export function ConversationList({
   activeConversationId,
   onSelectConversation,
   onNewChat,
+  onDeleteConversation,
   onClose,
 }: ConversationListProps) {
   const [query, setQuery] = useState("");
@@ -117,6 +119,7 @@ export function ConversationList({
               isPinned={conversation.isPinned}
               isActive={conversation.id === activeConversationId}
               onSelect={() => onSelectConversation(conversation.id)}
+              onDelete={() => onDeleteConversation(conversation.id)}
             />
           ))
         )}

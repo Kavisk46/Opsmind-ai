@@ -1,13 +1,12 @@
 "use client";
 
 import { Activity, CheckCircle2, Clock, Users } from "lucide-react";
-import { useEffect, useState } from "react";
 
 import { StatCard } from "@/components/Cards/StatCard";
-import { normalizeError } from "@/lib/api";
+import { ApiError } from "@/lib/api";
 import activeUsersData from "@/lib/mock-data/analytics-active-users.json";
 
-import { getAiMetricsSummary, type AiMetricsSummary } from "./analytics-api";
+import { useAiMetricsSummary } from "./analytics-api";
 import {
   average,
   percentChange,
@@ -26,12 +25,6 @@ function roundedChange(current: number, previous: number): number {
   return Math.round(percentChange(current, previous) * 10) / 10;
 }
 
-type SummaryState =
-  | { status: "loading" }
-  | { status: "forbidden" }
-  | { status: "error" }
-  | { status: "ready"; summary: AiMetricsSummary };
-
 // "Avg. Active Users" has no backend equivalent at all — this app has no
 // session/user-activity tracking anywhere (verified: no such concept
 // exists in AIMetricsService.summary() or anywhere else in the backend).
@@ -39,23 +32,12 @@ type SummaryState =
 // three cards below are real. See analytics-api.ts for why they're a
 // flat admin-only snapshot rather than a time-series like this one.
 export function AnalyticsKpiCards({ timeRange }: AnalyticsKpiCardsProps) {
-  const [state, setState] = useState<SummaryState>({ status: "loading" });
-
-  useEffect(() => {
-    const controller = new AbortController();
-
-    getAiMetricsSummary({ signal: controller.signal })
-      .then((summary) => setState({ status: "ready", summary }))
-      .catch((error) => {
-        const apiError = normalizeError(error);
-        if (apiError.code === "ABORTED") {
-          return;
-        }
-        setState({ status: apiError.status === 403 ? "forbidden" : "error" });
-      });
-
-    return () => controller.abort();
-  }, []);
+  // useAiMetricsSummary() is a plain useQuery() — cached (60s staleTime,
+  // see lib/query-client.ts) and SHARED with StatsCards.tsx via the same
+  // query key, so whichever of the two mounts second gets an instant
+  // cache hit instead of a second request to this admin-gated endpoint.
+  const { data: summary, isPending, error } = useAiMetricsSummary();
+  const isForbidden = error instanceof ApiError && error.status === 403;
 
   const currentUsers = sliceByRange(activeUsers, timeRange);
   const avgUsers = average(currentUsers.map((point) => point.users));
@@ -65,8 +47,8 @@ export function AnalyticsKpiCards({ timeRange }: AnalyticsKpiCardsProps) {
   const usersChange = roundedChange(avgUsers, previousAvgUsers);
 
   const successRatePercent =
-    state.status === "ready" && state.summary.totalRequests > 0
-      ? (state.summary.successCount / state.summary.totalRequests) * 100
+    summary && summary.totalRequests > 0
+      ? (summary.successCount / summary.totalRequests) * 100
       : null;
 
   const cardsForState = (): {
@@ -74,28 +56,28 @@ export function AnalyticsKpiCards({ timeRange }: AnalyticsKpiCardsProps) {
     responseValue: string;
     successValue: string;
   } => {
-    if (state.status === "forbidden") {
+    if (isForbidden) {
       return {
         queriesValue: "Admin access required",
         responseValue: "Admin access required",
         successValue: "Admin access required",
       };
     }
-    if (state.status === "error") {
+    if (error) {
       return {
         queriesValue: "Unavailable",
         responseValue: "Unavailable",
         successValue: "Unavailable",
       };
     }
-    if (state.status === "loading") {
+    if (isPending) {
       return { queriesValue: "…", responseValue: "…", successValue: "…" };
     }
     return {
-      queriesValue: state.summary.totalRequests.toLocaleString(),
+      queriesValue: summary.totalRequests.toLocaleString(),
       responseValue:
-        state.summary.avgLatencyMs !== null
-          ? `${Math.round(state.summary.avgLatencyMs)}ms`
+        summary.avgLatencyMs !== null
+          ? `${Math.round(summary.avgLatencyMs)}ms`
           : "No data yet",
       successValue:
         successRatePercent !== null ? `${successRatePercent.toFixed(1)}%` : "No data yet",

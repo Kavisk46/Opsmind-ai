@@ -1,5 +1,6 @@
 "use client";
 
+import { useQueryClient } from "@tanstack/react-query";
 import { X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
@@ -10,7 +11,12 @@ import { toast } from "@/lib/toast";
 import { FOCUS_RING_CLASS, cn } from "@/lib/utils";
 import { useModalStore } from "@/store/modal-store";
 
-import { deleteDocument, listDocuments, uploadDocument } from "./documents-api";
+import {
+  DOCUMENTS_QUERY_KEY,
+  deleteDocument,
+  uploadDocument,
+  useDocuments,
+} from "./documents-api";
 import { SearchBar } from "./SearchBar";
 import {
   UPLOAD_ACCEPT_ATTRIBUTE,
@@ -20,6 +26,12 @@ import { UploadDropzone } from "./UploadDropzone";
 import { UploadItem, type UploadEntry } from "./UploadItem";
 
 export const UPLOAD_MODAL_ID = "kb-upload";
+
+// Client-side only — GET /documents has no page/limit/offset params
+// (verified: no such query params anywhere in api/routes/documents.py),
+// so this paginates the already-fully-fetched real list in the UI rather
+// than requesting pages from a backend that doesn't support them.
+const PAGE_SIZE = 10;
 
 export function UploadModal() {
   const activeModalId = useModalStore((state) => state.activeModalId);
@@ -38,11 +50,17 @@ export function UploadModal() {
 function UploadModalContent() {
   const closeModal = useModalStore((state) => state.closeModal);
   const [entries, setEntries] = useState<UploadEntry[]>([]);
-  const [isLoadingExisting, setIsLoadingExisting] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [page, setPage] = useState(1);
   const abortControllersRef = useRef<Map<string, AbortController>>(new Map());
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const queryClient = useQueryClient();
+  // Cached and SHARED with StatsCards.tsx's "Documents Indexed" count (see
+  // documents-api.ts) — this modal invalidates the same key after a
+  // successful upload/delete below, so the dashboard reflects it too
+  // without needing to know this component exists.
+  const documentsQuery = useDocuments();
 
   useModalDismiss({ onClose: closeModal, closeButtonRef, containerRef });
 
@@ -61,41 +79,39 @@ function UploadModalContent() {
     // Mount-only: this component exists exactly as long as the modal is open.
   }, []);
 
-  // Seeds the list with documents already uploaded in earlier sessions
-  // (GET /documents) — this IS this feature's "document listing": the same
-  // UploadItem list doubles as both "what I'm uploading right now" and
-  // "what I've already uploaded", so delete works uniformly on either.
+  // Seeds the list with documents already uploaded in earlier sessions —
+  // this IS this feature's "document listing": the same UploadItem list
+  // doubles as both "what I'm uploading right now" and "what I've already
+  // uploaded" (INDEPENDENTLY mutable state after this — uploads/retries
+  // mutate per-entry progress, which isn't something query data drives).
+  // This component is fully unmounted/remounted each time the modal
+  // closes/opens (see UploadModal above), so this mount-only effect
+  // re-seeds fresh (from cache, if warm) on every open, same as before.
   useEffect(() => {
-    const controller = new AbortController();
+    if (documentsQuery.data) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setEntries((prev) => [
+        ...prev,
+        ...documentsQuery.data.map(
+          (document): UploadEntry => ({
+            id: document.id,
+            filename: document.filename,
+            sizeBytes: document.sizeBytes,
+            file: null,
+            documentId: document.id,
+            status: "success",
+            progress: 100,
+          })
+        ),
+      ]);
+    }
+  }, [documentsQuery.data]);
 
-    listDocuments({ signal: controller.signal })
-      .then((documents) => {
-        setEntries((prev) => [
-          ...prev,
-          ...documents.map(
-            (document): UploadEntry => ({
-              id: document.id,
-              filename: document.filename,
-              sizeBytes: document.sizeBytes,
-              file: null,
-              documentId: document.id,
-              status: "success",
-              progress: 100,
-            })
-          ),
-        ]);
-      })
-      .catch((error) => {
-        const apiError = normalizeError(error);
-        if (apiError.code !== "ABORTED") {
-          toast(getFriendlyErrorMessage(apiError));
-        }
-      })
-      .finally(() => setIsLoadingExisting(false));
-
-    return () => controller.abort();
-    // Mount-only: fetched exactly once when the modal opens.
-  }, []);
+  useEffect(() => {
+    if (documentsQuery.error) {
+      toast(getFriendlyErrorMessage(normalizeError(documentsQuery.error)));
+    }
+  }, [documentsQuery.error]);
 
   const runUpload = (entryId: string, file: File) => {
     const controller = new AbortController();
@@ -124,6 +140,10 @@ function UploadModalContent() {
               : existing
           )
         );
+        // Keeps StatsCards.tsx's "Documents Indexed" count (shares this
+        // exact query key) correct next time it's viewed, without this
+        // modal needing to know that component exists.
+        void queryClient.invalidateQueries({ queryKey: DOCUMENTS_QUERY_KEY });
       })
       .catch((error) => {
         const apiError = normalizeError(error);
@@ -166,6 +186,7 @@ function UploadModalContent() {
     });
 
     setEntries((prev) => [...newEntries, ...prev]);
+    setPage(1);
 
     for (const entry of newEntries) {
       if (entry.status === "uploading" && entry.file) {
@@ -207,12 +228,16 @@ function UploadModalContent() {
     // action, not a background process that could surprise them.
     setEntries((prev) => prev.filter((existing) => existing.id !== id));
 
-    deleteDocument(documentId).catch((error) => {
-      toast(getFriendlyErrorMessage(normalizeError(error)));
-      // Failed server-side — restore the entry rather than leaving the UI
-      // claiming it's gone when it isn't.
-      setEntries((prev) => [entry, ...prev]);
-    });
+    deleteDocument(documentId)
+      .then(() => {
+        void queryClient.invalidateQueries({ queryKey: DOCUMENTS_QUERY_KEY });
+      })
+      .catch((error) => {
+        toast(getFriendlyErrorMessage(normalizeError(error)));
+        // Failed server-side — restore the entry rather than leaving the
+        // UI claiming it's gone when it isn't.
+        setEntries((prev) => [entry, ...prev]);
+      });
   };
 
   // Client-side filter over the real, already-fetched document list — no
@@ -222,6 +247,17 @@ function UploadModalContent() {
   const filteredEntries = entries.filter((entry) =>
     entry.filename.toLowerCase().includes(searchQuery.trim().toLowerCase())
   );
+  const totalPages = Math.max(1, Math.ceil(filteredEntries.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const pagedEntries = filteredEntries.slice(
+    (currentPage - 1) * PAGE_SIZE,
+    currentPage * PAGE_SIZE
+  );
+
+  const handleSearchChange = (value: string) => {
+    setSearchQuery(value);
+    setPage(1);
+  };
 
   return (
     <>
@@ -260,30 +296,59 @@ function UploadModalContent() {
             onFilesSelected={handleFilesSelected}
             accept={UPLOAD_ACCEPT_ATTRIBUTE}
           />
-          {isLoadingExisting && (
+          {documentsQuery.isPending && (
             <p className="text-xs text-muted-foreground">
               Loading your documents…
             </p>
           )}
           {entries.length > 0 && (
             <>
-              <SearchBar value={searchQuery} onChange={setSearchQuery} />
+              <SearchBar value={searchQuery} onChange={handleSearchChange} />
               {filteredEntries.length === 0 ? (
                 <p className="text-xs text-muted-foreground">
                   No documents match &ldquo;{searchQuery}&rdquo;.
                 </p>
               ) : (
-                <div className="space-y-2">
-                  {filteredEntries.map((entry) => (
-                    <UploadItem
-                      key={entry.id}
-                      entry={entry}
-                      onRemove={handleRemove}
-                      onRetry={handleRetry}
-                      onDelete={handleDelete}
-                    />
-                  ))}
-                </div>
+                <>
+                  <div className="space-y-2">
+                    {pagedEntries.map((entry) => (
+                      <UploadItem
+                        key={entry.id}
+                        entry={entry}
+                        onRemove={handleRemove}
+                        onRetry={handleRetry}
+                        onDelete={handleDelete}
+                      />
+                    ))}
+                  </div>
+                  {totalPages > 1 && (
+                    <div className="flex items-center justify-between gap-2 pt-1">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setPage((p) => Math.max(1, p - 1))}
+                        disabled={currentPage <= 1}
+                      >
+                        Previous
+                      </Button>
+                      <span className="text-xs text-muted-foreground">
+                        Page {currentPage} of {totalPages}
+                      </span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() =>
+                          setPage((p) => Math.min(totalPages, p + 1))
+                        }
+                        disabled={currentPage >= totalPages}
+                      >
+                        Next
+                      </Button>
+                    </div>
+                  )}
+                </>
               )}
             </>
           )}

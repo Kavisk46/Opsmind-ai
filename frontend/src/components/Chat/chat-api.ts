@@ -1,6 +1,8 @@
+import { useQuery } from "@tanstack/react-query";
+
 import { apiClient } from "@/lib/api";
 
-import type { Citation } from "./types";
+import type { Citation, Message, MessageRole } from "./types";
 
 // Wire shapes verified directly against backend/schemas/chat.py and
 // backend/schemas/conversation.py — never guessed. snake_case here
@@ -50,15 +52,25 @@ function toCitation(citation: CitationWire): Citation {
 // in the backend specifically for "a client that wants a conversation to
 // exist ... before the user has typed a first question yet" (see
 // api/routes/conversations.py's docstring) — exactly this use case.
+//
+// `title` should be the first question, truncated — matches exactly what
+// ConversationService.get_or_create_conversation does server-side when
+// IT creates a conversation on the fly (title_hint[:80]); that path never
+// runs for a conversation created here, since this app always pre-creates
+// one and passes a real conversation_id to every /chat(/stream) call, so
+// the backend's own auto-titling never gets a chance to fire. Omitting
+// this would leave every conversation titled the backend's generic
+// "New conversation" default forever.
 export async function createConversation(options?: {
+  title?: string;
   signal?: AbortSignal;
-}): Promise<{ id: string }> {
+}): Promise<{ id: string; title: string }> {
   const conversation = await apiClient.post<ConversationResponseWire>(
     "/conversations",
-    {},
+    { title: options?.title?.slice(0, 80) },
     { signal: options?.signal }
   );
-  return { id: conversation.id };
+  return { id: conversation.id, title: conversation.title };
 }
 
 export interface Conversation {
@@ -81,7 +93,8 @@ function toConversation(conversation: ConversationResponseWire): Conversation {
 // activity-api.ts to build a real activity feed entry per conversation
 // (there's no per-message activity log; a conversation's updated_at is
 // the closest real "last activity happened here" signal the backend has
-// — see ConversationService.append_message, which is what bumps it).
+// — see ConversationService.append_message, which is what bumps it) and
+// by AssistantConsole.tsx for the real conversation sidebar.
 export async function listConversations(options?: {
   signal?: AbortSignal;
 }): Promise<Conversation[]> {
@@ -90,6 +103,87 @@ export async function listConversations(options?: {
     { signal: options?.signal }
   );
   return conversations.map(toConversation);
+}
+
+// AssistantConsole.tsx uses this key as its cache's source of truth for
+// the sidebar (via queryClient.setQueryData/invalidateQueries after a
+// create/delete) rather than keeping a second, parallel local copy of
+// the same list that could drift out of sync with it.
+export const CONVERSATIONS_QUERY_KEY = ["conversations"] as const;
+
+export function useConversations() {
+  return useQuery({
+    queryKey: CONVERSATIONS_QUERY_KEY,
+    queryFn: ({ signal }) => listConversations({ signal }),
+  });
+}
+
+interface MessageResponseWire {
+  role: string;
+  content: string;
+  created_at: string;
+}
+
+interface ConversationDetailWire extends ConversationResponseWire {
+  messages: MessageResponseWire[];
+}
+
+export interface ConversationDetail extends Conversation {
+  messages: Message[];
+}
+
+// GET /conversations/{id} — full message history for one conversation.
+// backend/schemas/conversation.py's MessageResponse has no `id` and no
+// citations field at all (citations are only ever returned alongside the
+// LIVE answer that produced them, in ChatResponse/the stream's `done`
+// event — never persisted per-message), so a historical message loaded
+// here can never show its citations, only ones asked in the current
+// session can. `id` is synthesized client-side (stable per index, never
+// sent anywhere) purely so React has a key and MessageBubble's existing
+// Pick<Message, ...> shape is satisfied.
+export async function getConversation(
+  conversationId: string,
+  options?: { signal?: AbortSignal }
+): Promise<ConversationDetail> {
+  const conversation = await apiClient.get<ConversationDetailWire>(
+    `/conversations/${conversationId}`,
+    { signal: options?.signal }
+  );
+
+  return {
+    ...toConversation(conversation),
+    messages: conversation.messages.map((message, index) => ({
+      id: `${conversation.id}-${index}`,
+      role: message.role as MessageRole,
+      content: message.content,
+      createdAt: message.created_at,
+    })),
+  };
+}
+
+// Used by ChatWindow.tsx to load a selected conversation's real history.
+// `enabled: id !== null` is what lets ChatWindow call this unconditionally
+// (a brand-new, not-yet-created chat has conversationId=null) without an
+// extra guard at the call site; react-query simply never fires the
+// request in that case. Caching this means re-selecting a conversation
+// already opened earlier in the session shows its history instantly
+// instead of re-fetching and flashing "Loading conversation…" again.
+export function useConversation(conversationId: string | null) {
+  return useQuery({
+    queryKey: ["conversation", conversationId],
+    queryFn: ({ signal }) => getConversation(conversationId as string, { signal }),
+    enabled: conversationId !== null,
+  });
+}
+
+// DELETE /conversations/{id} — 204 No Content on success.
+export async function deleteConversation(
+  conversationId: string,
+  options?: { signal?: AbortSignal }
+): Promise<void> {
+  await apiClient.delete<void>(`/conversations/${conversationId}`, {
+    signal: options?.signal,
+  });
 }
 
 export interface SendChatMessageResult {

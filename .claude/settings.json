@@ -57,7 +57,11 @@
       "Bash(grep -v -E \"^\\(venv|\\\\.venv|__pycache__|\\\\.git\\)$\")",
       "Bash(grep -v -E \"^\\(node_modules|\\\\.next|\\\\.git\\)$\")",
       "Bash(node -e \"const p=require\\('./package.json'\\); console.log\\(JSON.stringify\\(p.scripts,null,2\\)\\); console.log\\('deps has test runner:', Object.keys\\({...p.dependencies,...p.devDependencies}\\).filter\\(d=>/jest|vitest|playwright|testing-library|cypress/i.test\\(d\\)\\)\\)\")",
-      "Bash(xargs -I{} basename {})"
+      "Bash(xargs -I{} basename {})",
+      "Bash(node -e ' *)",
+      "Bash(echo \"EXIT CODE: $?\")",
+      "Bash(echo \"TSC EXIT: $?\")",
+      "Bash(npm ci *)"
     ]
   }
 }

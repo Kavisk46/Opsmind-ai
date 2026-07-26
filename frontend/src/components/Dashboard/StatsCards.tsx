@@ -1,12 +1,11 @@
 "use client";
 
 import { BarChart3, Clock, FileText, Users } from "lucide-react";
-import { useEffect, useState } from "react";
 
-import { getAiMetricsSummary } from "@/components/Analytics/analytics-api";
+import { useAiMetricsSummary } from "@/components/Analytics/analytics-api";
 import { StatCard } from "@/components/Cards/StatCard";
-import { listDocuments } from "@/components/KnowledgeBase/documents-api";
-import { normalizeError } from "@/lib/api";
+import { useDocuments } from "@/components/KnowledgeBase/documents-api";
+import { ApiError } from "@/lib/api";
 import statsData from "@/lib/mock-data/stats.json";
 
 interface StatEntry {
@@ -25,88 +24,49 @@ const membersFallback = (statsData as StatEntry[]).find(
   (stat) => stat.id === "members"
 ) as StatEntry;
 
-type CardState =
-  | { status: "loading" }
-  | { status: "forbidden" }
-  | { status: "error" }
-  | { status: "ready"; value: string };
-
-function valueForState(state: CardState): string {
-  switch (state.status) {
-    case "loading":
-      return "…";
-    case "forbidden":
-      return "Admin access required";
-    case "error":
-      return "Unavailable";
-    case "ready":
-      return state.value;
-  }
-}
-
 export function StatsCards() {
-  const [documentsState, setDocumentsState] = useState<CardState>({
-    status: "loading",
-  });
-  const [queriesState, setQueriesState] = useState<CardState>({
-    status: "loading",
-  });
-  const [responseState, setResponseState] = useState<CardState>({
-    status: "loading",
-  });
+  // Both hooks are plain useQuery() calls, cached and SHARED with
+  // UploadModal.tsx / AnalyticsKpiCards.tsx via the same query keys — see
+  // documents-api.ts / analytics-api.ts. Whichever component mounts
+  // second gets an instant cache hit instead of a redundant request.
+  const documentsQuery = useDocuments();
+  const metricsQuery = useAiMetricsSummary();
+  const isForbidden =
+    metricsQuery.error instanceof ApiError && metricsQuery.error.status === 403;
 
-  useEffect(() => {
-    const controller = new AbortController();
+  const documentsValue = documentsQuery.isPending
+    ? "…"
+    : documentsQuery.error
+      ? "Unavailable"
+      : documentsQuery.data.length.toLocaleString();
 
-    listDocuments({ signal: controller.signal })
-      .then((documents) =>
-        setDocumentsState({
-          status: "ready",
-          value: documents.length.toLocaleString(),
-        })
-      )
-      .catch((error) => {
-        if (normalizeError(error).code !== "ABORTED") {
-          setDocumentsState({ status: "error" });
-        }
-      });
+  // Same GET /internal/ai-metrics snapshot AnalyticsKpiCards.tsx uses —
+  // admin-only (see analytics-api.ts), so a non-admin viewer sees these
+  // two cards fall back to "Admin access required" rather than a
+  // silently-faked number.
+  const queriesValue = metricsQuery.isPending
+    ? "…"
+    : isForbidden
+      ? "Admin access required"
+      : metricsQuery.error
+        ? "Unavailable"
+        : metricsQuery.data.totalRequests.toLocaleString();
 
-    // Same GET /internal/ai-metrics snapshot AnalyticsKpiCards.tsx uses —
-    // admin-only (see analytics-api.ts), so a non-admin viewer will see
-    // these two cards fall back to "Admin access required" rather than a
-    // silently-faked number.
-    getAiMetricsSummary({ signal: controller.signal })
-      .then((summary) => {
-        setQueriesState({
-          status: "ready",
-          value: summary.totalRequests.toLocaleString(),
-        });
-        setResponseState({
-          status: "ready",
-          value:
-            summary.avgLatencyMs !== null
-              ? `${Math.round(summary.avgLatencyMs)}ms`
-              : "No data yet",
-        });
-      })
-      .catch((error) => {
-        const apiError = normalizeError(error);
-        if (apiError.code === "ABORTED") {
-          return;
-        }
-        const status = apiError.status === 403 ? "forbidden" : "error";
-        setQueriesState({ status });
-        setResponseState({ status });
-      });
-
-    return () => controller.abort();
-  }, []);
+  const responseValue = metricsQuery.isPending
+    ? "…"
+    : isForbidden
+      ? "Admin access required"
+      : metricsQuery.error
+        ? "Unavailable"
+        : metricsQuery.data.avgLatencyMs !== null
+          ? `${Math.round(metricsQuery.data.avgLatencyMs)}ms`
+          : "No data yet";
 
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
       <StatCard
         label="Documents Indexed"
-        value={valueForState(documentsState)}
+        value={documentsValue}
         change={null}
         icon={FileText}
       />
@@ -116,7 +76,7 @@ export function StatsCards() {
           "Today" would misrepresent what the number actually means. */}
       <StatCard
         label="Total AI Queries"
-        value={valueForState(queriesState)}
+        value={queriesValue}
         change={null}
         icon={BarChart3}
       />
@@ -129,7 +89,7 @@ export function StatsCards() {
       />
       <StatCard
         label="Avg. Response Time"
-        value={valueForState(responseState)}
+        value={responseValue}
         change={null}
         icon={Clock}
       />

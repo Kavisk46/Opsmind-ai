@@ -12,7 +12,7 @@
 
 **3:30–4:30 — Engineering rigor.** `pytest -q` — 228 tests, seconds, zero external dependencies. Show `.github/workflows/ci.yml` running lint → type-check → dependency scan → test → Docker build. Mention the golden regression dataset for retrieval quality specifically — "most RAG demos never prove retrieval doesn't silently regress; this one does."
 
-**4:30–5:00 — Honest close.** "The backend and AI pipeline are real and fully tested. The frontend is a complete, separately-built Next.js app currently running on mock data — wiring the two together is the next concrete step, and the typed API client was built specifically for that swap."
+**4:30–5:00 — Honest close.** "The backend and AI pipeline are real and fully tested. The frontend — auth, AI chat with real streaming and history, and documents — is now wired to this real backend too, through a typed API client with real request caching. What's left mock is scoped precisely, not hidden: most of the dashboard and analytics charts, since there's genuinely no backend data behind them yet."
 
 ## Resume Project Description
 
@@ -41,7 +41,7 @@
 3. **Token budgeting, concretely** — why message-count caps lie, what a token-budget-based truncation actually buys you, the two-layer defense-in-depth reasoning.
 4. **Golden regression testing** — why a semantically-blind fake embedding model (fine for plumbing tests) is *not* fine for a retrieval-regression dataset, and the specific bug (an all-zero embedding vector from a query with no matching keyword) that proved it.
 5. **The middleware bug** — the centerpiece. Walk through: registering `@app.exception_handler(Exception)`, assuming it was sufficient, writing a test that proved otherwise, isolating the exact trigger (`Depends(get_db)`'s async-generator pattern) with a minimal reproduction, and the actual fix (wrapping `call_next()`, not rewriting the whole middleware stack).
-6. **What's still not done, and why that's stated plainly** — the frontend/backend integration gap, the CVEs with fix versions not yet applied, the `Protocol` inconsistency. A real engineering project has a roadmap, not a claim of completeness.
+6. **What's still not done, and why that's stated plainly** — no path to the `admin` role for a real user, the CVEs with fix versions not yet applied, the `Protocol` inconsistency, the still-mock dashboard/analytics surface with no backend data behind it. A real engineering project has a roadmap, not a claim of completeness.
 
 ## Interview Talking Points
 
@@ -51,4 +51,4 @@
 
 **"How do you think about AI systems specifically, versus a normal backend?"** The observability angle — token budgeting and cost tracking aren't optional extras, they're what turns "I called an API" into an operable product. Concrete example: `context_provided`/`citation_count` as an honest, scoped substitute for real hallucination detection — knowing the difference between what you've built and what you'd need to build next matters as much as the code itself.
 
-**"What would you do differently, or next?"** Frontend/backend integration first (highest real leverage); the `Protocol`-typing inconsistency between `EmbeddingModel`/`Storage`/`LLMProvider` and `VectorStore`/`DocumentRepository` — a good, honest example of scope discipline (noticed, documented, deliberately deferred rather than rushed as a side effect of an unrelated change).
+**"What would you do differently, or next?"** A real admin-role path first (the RBAC-gated Analytics feature is unreachable for any real signed-up user today — a genuine gap, not a hypothetical one); the `Protocol`-typing inconsistency between `EmbeddingModel`/`Storage`/`LLMProvider` and `VectorStore`/`DocumentRepository` — a good, honest example of scope discipline (noticed, documented, deliberately deferred rather than rushed as a side effect of an unrelated change).

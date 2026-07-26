@@ -1,3 +1,5 @@
+import { useQuery } from "@tanstack/react-query";
+
 import { listConversations } from "@/components/Chat/chat-api";
 import { listDocuments } from "@/components/KnowledgeBase/documents-api";
 
@@ -52,4 +54,11 @@ export async function listRecentActivity(options?: {
   return [...uploadEntries, ...conversationEntries]
     .sort((a, b) => b.timestamp.localeCompare(a.timestamp))
     .slice(0, MAX_ENTRIES);
+}
+
+export function useRecentActivity() {
+  return useQuery({
+    queryKey: ["recent-activity"],
+    queryFn: ({ signal }) => listRecentActivity({ signal }),
+  });
 }
