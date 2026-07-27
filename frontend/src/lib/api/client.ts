@@ -109,6 +109,49 @@ export class ApiClient {
     this.unauthorizedHandler = handler;
   }
 
+  /**
+   * Exposed for the rare, legitimate case of needing this client's
+   * target origin OUTSIDE of a normal request/response call it makes
+   * itself — e.g. building a URL for a full-page browser navigation
+   * (auth-api.ts's getGoogleLoginUrl(), a redirect-based OAuth flow that
+   * fetch()/XHR fundamentally can't drive).
+   */
+  getBaseUrl(): string {
+    return this.baseUrl;
+  }
+
+  // Deduplicates concurrent refresh attempts into ONE in-flight request —
+  // several requests can 401 around the same moment (e.g. every request
+  // fired when a tab regains focus after the access token expired);
+  // without this, each would independently call POST /auth/refresh,
+  // needlessly racing to rotate the same refresh token (see
+  // AuthService.refresh()'s rotation — a second, slightly-later refresh
+  // call would find the first one's token already rotated away and fail).
+  private refreshPromise: Promise<boolean> | null = null;
+
+  private tryRefresh(): Promise<boolean> {
+    if (!this.refreshPromise) {
+      this.refreshPromise = fetch(this.buildUrl("/auth/refresh"), {
+        method: "POST",
+        credentials: "include",
+      })
+        .then((response) => response.ok)
+        .catch(() => false)
+        .finally(() => {
+          this.refreshPromise = null;
+        });
+    }
+    return this.refreshPromise;
+  }
+
+  // /auth/* requests never trigger a silent-refresh-and-retry — a wrong
+  // password on /auth/login legitimately 401s and has nothing to do with
+  // an expired access token; attempting a refresh there would be both
+  // meaningless and, for /auth/refresh itself, a real infinite loop.
+  private isAuthEndpoint(path: string): boolean {
+    return /^\/?auth\//.test(path);
+  }
+
   get<T>(path: string, options?: ApiRequestOptions): Promise<T> {
     return this.request<T>("GET", path, undefined, options);
   }
@@ -159,12 +202,31 @@ export class ApiClient {
   ): Promise<Response> {
     const retryConfig = resolveRetryConfig(options.retry);
     let attempt = 0;
+    let hasTriedRefresh = false;
 
     for (;;) {
       try {
         return await this.executeStreamOnce(path, body, options);
       } catch (error) {
         const apiError = normalizeError(error);
+
+        // A 401 here means the access-token cookie expired mid-session
+        // (see core/cookies.py's ~30-minute access-token lifetime) — a
+        // silent POST /auth/refresh (using the still-valid refresh-token
+        // cookie) and one immediate retry recovers transparently,
+        // without the chat window ever surfacing an error the user
+        // would read as "you got logged out" for something this
+        // routine.
+        if (
+          apiError.status === 401 &&
+          !hasTriedRefresh &&
+          !this.isAuthEndpoint(path)
+        ) {
+          hasTriedRefresh = true;
+          if (await this.tryRefresh()) {
+            continue;
+          }
+        }
 
         if (
           !shouldRetry(
@@ -205,12 +267,24 @@ export class ApiClient {
   ): Promise<T> {
     const retryConfig = resolveRetryConfig(options.retry);
     let attempt = 0;
+    let hasTriedRefresh = false;
 
     for (;;) {
       try {
         return await this.executeUploadOnce<T>(path, formData, options);
       } catch (error) {
         const apiError = normalizeError(error);
+
+        if (
+          apiError.status === 401 &&
+          !hasTriedRefresh &&
+          !this.isAuthEndpoint(path)
+        ) {
+          hasTriedRefresh = true;
+          if (await this.tryRefresh()) {
+            continue;
+          }
+        }
 
         if (
           !shouldRetry(
@@ -241,12 +315,24 @@ export class ApiClient {
   ): Promise<T> {
     const retryConfig = resolveRetryConfig(options.retry);
     let attempt = 0;
+    let hasTriedRefresh = false;
 
     for (;;) {
       try {
         return await this.executeOnce<T>(method, path, body, options);
       } catch (error) {
         const apiError = normalizeError(error);
+
+        if (
+          apiError.status === 401 &&
+          !hasTriedRefresh &&
+          !this.isAuthEndpoint(path)
+        ) {
+          hasTriedRefresh = true;
+          if (await this.tryRefresh()) {
+            continue;
+          }
+        }
 
         if (
           !shouldRetry(
@@ -303,6 +389,12 @@ export class ApiClient {
         headers: config.headers,
         body: config.body,
         signal: config.signal,
+        // Required for the backend's httpOnly auth cookies (see
+        // core/cookies.py) to be sent at all — the API and this app are
+        // on different origins (Vercel vs. Render), and a cross-origin
+        // fetch() never sends cookies by default regardless of same-
+        // browser login state.
+        credentials: "include",
       });
 
       const response = await this.responseInterceptors.run(rawResponse);
@@ -360,6 +452,7 @@ export class ApiClient {
         headers: config.headers,
         body: config.body,
         signal: config.signal,
+        credentials: "include",
       });
 
       if (!response.ok) {
@@ -404,6 +497,9 @@ export class ApiClient {
 
             const xhr = new XMLHttpRequest();
             xhr.open("POST", config.url);
+            // XHR's equivalent of fetch's credentials: "include" — same
+            // reasoning as executeOnce()'s identical comment.
+            xhr.withCredentials = true;
 
             config.headers.forEach((value, key) => {
               // FormData needs the browser's own auto-generated multipart

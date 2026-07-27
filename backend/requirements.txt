@@ -14,3 +14,11 @@ sentence-transformers==5.6.0
 pypdf==6.14.2
 prometheus-client==0.25.0
 openai==2.46.0
+# OAuth (Google/GitHub/Microsoft login) — Authlib's Starlette integration
+# needs both an async HTTP client (httpx) to talk to each provider's
+# token/userinfo endpoints, and a signed session (itsdangerous, via
+# Starlette's SessionMiddleware in main.py) to hold the CSRF state/nonce
+# between the redirect to the provider and its callback back to us.
+Authlib==1.3.2
+httpx==0.27.2
+itsdangerous==2.2.0

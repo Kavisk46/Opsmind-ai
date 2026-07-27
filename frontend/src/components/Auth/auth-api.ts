@@ -1,5 +1,4 @@
 import { apiClient } from "@/lib/api";
-import { setAuthToken } from "@/lib/api/token";
 
 import type { AuthCredentials, AuthUser } from "./types";
 
@@ -40,7 +39,6 @@ export interface LoginApiResult {
   // auth.py/users.py), so those branches simply never match anymore.
   // This is what lets LoginForm.tsx require zero changes.
   outcome: "authenticated";
-  token: string;
   user: AuthUser;
 }
 
@@ -48,21 +46,43 @@ export async function login({
   email,
   password,
 }: AuthCredentials): Promise<LoginApiResult> {
-  const tokenResponse = await apiClient.post<TokenResponse>("/auth/login", {
-    email,
-    password,
-  });
-
-  // POST /auth/login returns ONLY a token — never the user profile
-  // (see schemas/auth.py's TokenResponse). The token must be set BEFORE
-  // calling getCurrentUser() below: apiClient's existing attachAuthToken
-  // request interceptor (src/lib/api/client.ts) reads getAuthToken() to
-  // build the Authorization header, so GET /users/me would otherwise go
-  // out unauthenticated and 401.
-  setAuthToken(tokenResponse.access_token);
+  // POST /auth/login sets the access/refresh tokens as httpOnly cookies
+  // directly on this response (see backend/core/cookies.py) — the
+  // browser stores them automatically because apiClient's fetch calls
+  // use credentials: "include" (src/lib/api/client.ts); there is
+  // nothing for this app's JS to read or store itself, which is the
+  // whole point of httpOnly (a script — including an XSS payload —
+  // cannot read these cookies, unlike the old in-memory-token/session-
+  // cookie approach this replaced). The response body's access_token
+  // field is deliberately ignored here.
+  await apiClient.post<TokenResponse>("/auth/login", { email, password });
   const user = await getCurrentUser();
 
-  return { outcome: "authenticated", token: tokenResponse.access_token, user };
+  return { outcome: "authenticated", user };
+}
+
+// POST /auth/logout — revokes the refresh token server-side (a REAL
+// logout, not just "the client forgot its token") and clears both
+// cookies via this response's Set-Cookie headers.
+export async function logout(): Promise<void> {
+  await apiClient.post<void>("/auth/logout");
+}
+
+// Full-page-navigation URLs for "Continue with ..." — deliberately NOT
+// apiClient calls: these routes (backend/api/routes/oauth.py) redirect
+// the BROWSER itself to each provider's consent screen, which only makes
+// sense as a real navigation (`window.location.href = ...`), never a
+// fetch()/XHR request.
+export function getGoogleLoginUrl(): string {
+  return apiClient.getBaseUrl() + "/auth/google/login";
+}
+
+export function getGithubLoginUrl(): string {
+  return apiClient.getBaseUrl() + "/auth/github/login";
+}
+
+export function getMicrosoftLoginUrl(): string {
+  return apiClient.getBaseUrl() + "/auth/microsoft/login";
 }
 
 export interface SignupInput {

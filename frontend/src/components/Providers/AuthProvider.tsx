@@ -14,7 +14,11 @@ import {
 import {
   forgotPassword as apiForgotPassword,
   getCurrentUser,
+  getGithubLoginUrl,
+  getGoogleLoginUrl,
+  getMicrosoftLoginUrl,
   login as apiLogin,
+  logout as apiLogout,
   resendOtp as apiResendOtp,
   resendVerificationEmail as apiResendVerificationEmail,
   resetPassword as apiResetPassword,
@@ -26,12 +30,13 @@ import {
 } from "@/components/Auth/auth-api";
 import { GUEST_AUTH_TOKEN, GUEST_USER } from "@/components/Auth/guest-mode";
 import {
+  AUTHENTICATED_SESSION_MARKER,
   clearSessionCookie,
   getSessionCookie,
   setSessionCookie,
 } from "@/components/Auth/session-cookie";
 import type { AuthCredentials, AuthUser } from "@/components/Auth/types";
-import { apiClient } from "@/lib/api";
+import { apiClient, normalizeError } from "@/lib/api";
 import { clearAuthToken, setAuthToken } from "@/lib/api/token";
 import { isDev } from "@/lib/env";
 import { logger } from "@/lib/logger";
@@ -65,6 +70,17 @@ export interface AuthContextValue {
   // guest-mode.ts) — never set for a real, backend-authenticated user.
   isGuest: boolean;
   login: (credentials: AuthCredentials) => Promise<LoginResult>;
+  // Navigates the browser to each provider's own consent screen — see
+  // auth-api.ts's getGoogleLoginUrl()/getGithubLoginUrl()/
+  // getMicrosoftLoginUrl(). Not async/no return value: this is a
+  // full-page navigation away from this app, not a fetch() this
+  // component could await a result from; the OAuth callback route
+  // (backend) redirects back here once it's done, and the session-
+  // restore effect below picks the resulting cookies up on that fresh
+  // page load.
+  loginWithGoogle: () => void;
+  loginWithGithub: () => void;
+  loginWithMicrosoft: () => void;
   // Grants the same "authenticated" state as a real login, via the same
   // session cookie and token slots, without calling the backend at all —
   // there's no account to look up, so this bypasses POST /auth/login
@@ -93,11 +109,17 @@ interface AuthProviderProps {
 // ...) depends on; it hasn't changed, only what happens inside each
 // callback has.
 //
-// Session restoration: the in-memory token (lib/api/token.ts) is wiped
-// on every reload by design — session-cookie.ts's cookie is what
-// survives a reload and is used below to rehydrate it via a real
-// GET /users/me ("whoami") call, exactly as this file used to note as
-// the eventual real-backend behavior.
+// Session restoration: the real session lives entirely in httpOnly
+// cookies the BACKEND sets (see backend/core/cookies.py) — this app has
+// no token of its own to read across a reload anymore, only a
+// GET /users/me ("whoami") call below to ask the backend whether the
+// browser's cookies still represent a valid session. Separately, every
+// path that establishes a session (login() and this file's restore
+// effect) also sets session-cookie.ts's marker on THIS app's own
+// domain — required for proxy.ts's route protection to recognize the
+// session at all, since the real cookies above live on the backend's
+// different origin and are invisible to this app's own server. See
+// session-cookie.ts's doc comment for the full explanation.
 export function AuthProvider({ children }: AuthProviderProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -112,10 +134,21 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const login = useCallback(
     async (credentials: AuthCredentials): Promise<LoginResult> => {
+      // POST /auth/login sets the REAL httpOnly session cookies directly
+      // on its own response (see auth-api.ts's login() doc comment) —
+      // this app's JS never sees or manages that token itself. But those
+      // cookies live on the BACKEND's own origin (Render), a different
+      // domain than this frontend (Vercel) — proxy.ts, which protects
+      // routes on THIS domain, can never see them directly (see
+      // session-cookie.ts's doc comment for the full explanation).
+      // setSessionCookie() here sets the marker proxy.ts actually checks,
+      // on the frontend's own domain, so the very next navigation (e.g.
+      // this function's caller pushing to "/") correctly recognizes the
+      // session that was JUST established instead of bouncing it back to
+      // /login.
       const result = await apiLogin(credentials);
 
-      setAuthToken(result.token);
-      setSessionCookie(result.token);
+      setSessionCookie(AUTHENTICATED_SESSION_MARKER);
       setUser(result.user);
       setStatus("authenticated");
       setIsGuest(false);
@@ -123,6 +156,18 @@ export function AuthProvider({ children }: AuthProviderProps) {
     },
     []
   );
+
+  const loginWithGoogle = useCallback(() => {
+    window.location.href = getGoogleLoginUrl();
+  }, []);
+
+  const loginWithGithub = useCallback(() => {
+    window.location.href = getGithubLoginUrl();
+  }, []);
+
+  const loginWithMicrosoft = useCallback(() => {
+    window.location.href = getMicrosoftLoginUrl();
+  }, []);
 
   // Deliberately not async work beyond satisfying the `Promise<void>`
   // shape the rest of AuthContextValue uses — kept a Promise so a future
@@ -137,26 +182,22 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, []);
 
   // Session restoration on refresh — runs once, on mount, before the
-  // dev-auto-login effect below. Reads whatever token session-cookie.ts
-  // persisted across the reload (real user or guest) and rehydrates
-  // this component's in-memory state from it.
+  // dev-auto-login effect below. Guest mode is checked first via
+  // session-cookie.ts's marker (its only remaining job — see that file's
+  // updated doc comment) since it's a purely frontend identity with no
+  // backend session to restore. Otherwise, this calls GET /users/me
+  // directly with no token of its own to read or check first: the real
+  // access-token cookie is httpOnly, genuinely invisible to this code,
+  // and that's the point. If it's expired, apiClient's own silent-
+  // refresh-and-retry (src/lib/api/client.ts) transparently exchanges it
+  // for a new one via the refresh-token cookie before this call would
+  // even see a failure — this effect only ever observes the FINAL
+  // outcome, success or a real, unrecoverable 401.
   useEffect(() => {
     let cancelled = false;
 
     async function restoreSession() {
-      const token = getSessionCookie();
-
-      if (!token) {
-        if (!cancelled) setStatus("unauthenticated");
-        return;
-      }
-
-      // Guest mode's token never was, and never will be, a real JWT —
-      // checked first so restoring it doesn't waste a doomed API call
-      // against GET /users/me. Guest mode's own definition (guest-mode.ts)
-      // is untouched; this just correctly re-enters it after a refresh,
-      // which the in-memory-only mock could never do at all.
-      if (token === GUEST_AUTH_TOKEN) {
+      if (getSessionCookie() === GUEST_AUTH_TOKEN) {
         if (cancelled) return;
         setAuthToken(GUEST_AUTH_TOKEN);
         setUser(GUEST_USER);
@@ -166,19 +207,35 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
 
       try {
-        setAuthToken(token);
         const restoredUser = await getCurrentUser();
         if (cancelled) return;
+        // Sets (or re-affirms) proxy.ts's marker now that a real session
+        // is confirmed. This matters most right after an OAuth login:
+        // the backend's callback redirects the browser to this app's
+        // ROOT ("/"), a request proxy.ts sees BEFORE any of this app's
+        // JS has run — with no marker cookie yet, that very first
+        // request gets bounced to /login purely because nothing had a
+        // chance to set one yet. Setting it here, the moment this effect
+        // confirms the session is real, is what the pathname check right
+        // below uses to escape that one-time bounce.
+        setSessionCookie(AUTHENTICATED_SESSION_MARKER);
         setUser(restoredUser);
         setStatus("authenticated");
         setIsGuest(false);
+        // Setting the cookie above doesn't retroactively re-run
+        // proxy.ts's redirect for the CURRENT page — without this, an
+        // OAuth login (or any case where proxy.ts bounced a request that
+        // arrived before the marker existed) would leave a genuinely
+        // authenticated user stuck looking at the login page. Same
+        // pattern the dev-auto-login effect below already uses.
+        if (pathname === "/login") {
+          router.replace("/");
+        }
       } catch {
-        // Expired/invalid token, or the backend was unreachable —
-        // either way, fail closed: clear everything and land on
+        // No session, an expired refresh token, or the backend was
+        // unreachable — either way, fail closed: land on
         // "unauthenticated" rather than a half-authenticated state.
         if (cancelled) return;
-        clearAuthToken();
-        clearSessionCookie();
         setStatus("unauthenticated");
       }
     }
@@ -187,6 +244,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
     return () => {
       cancelled = true;
     };
+    // Mount-once, deliberately: this must run exactly once per page load,
+    // not re-run on every client-side navigation. pathname/router are
+    // read for the one-time /login escape hatch above, not to react to
+    // navigation — same reasoning as the dev-auto-login effect below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -222,6 +284,17 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, []);
 
   const logout = useCallback(async () => {
+    // POST /auth/logout revokes the refresh token server-side and clears
+    // both cookies via its own response — a REAL logout, not just this
+    // tab forgetting a token. Best-effort: called for guest sessions too
+    // (harmless — the route is idempotent with no cookie present at
+    // all), and a network failure here shouldn't trap the user in a
+    // "logged in" state they have no way to escape from locally.
+    try {
+      await apiLogout();
+    } catch (error) {
+      logger.error("Logout request failed", normalizeError(error));
+    }
     clearAuthToken();
     clearSessionCookie();
     setUser(null);
@@ -283,6 +356,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
       status,
       isGuest,
       login,
+      loginWithGoogle,
+      loginWithGithub,
+      loginWithMicrosoft,
       loginAsGuest,
       logout,
       signup,
@@ -298,6 +374,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
       status,
       isGuest,
       login,
+      loginWithGoogle,
+      loginWithGithub,
+      loginWithMicrosoft,
       loginAsGuest,
       logout,
       signup,

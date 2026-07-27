@@ -7,6 +7,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.middleware.sessions import SessionMiddleware
 
 from api.routes import (
     ai_metrics,
@@ -16,6 +17,7 @@ from api.routes import (
     documents,
     health,
     metrics,
+    oauth,
     root,
     status,
     users,
@@ -108,6 +110,19 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Required by Authlib's Starlette integration (core/oauth.py) — the OAuth
+# login flow needs somewhere to stash a CSRF `state` (and, for OIDC
+# providers, a `nonce`) between redirecting the browser to the provider
+# and that provider redirecting back to our callback route; Authlib reads
+# and writes both via `request.session`, which this middleware is what
+# makes exist at all. Signed with the same secret_key that signs this
+# app's JWTs — a second secret would be one more value to configure and
+# keep safe for no real benefit, since both already require the same
+# level of protection (a leaked secret_key already lets someone forge a
+# valid JWT for any user, which is strictly worse than forging an OAuth
+# CSRF state).
+app.add_middleware(SessionMiddleware, secret_key=settings.secret_key)
 
 
 @app.middleware("http")
@@ -353,6 +368,7 @@ app.include_router(status.router)
 app.include_router(metrics.router)
 app.include_router(users.router)
 app.include_router(auth.router)
+app.include_router(oauth.router)
 app.include_router(documents.router)
 app.include_router(chat.router)
 app.include_router(conversations.router)

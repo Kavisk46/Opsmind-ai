@@ -7,7 +7,11 @@ import { getEnvVar } from "@/lib/env";
 // alongside the API route. The (auth) pages (login, signup, etc.) are the
 // genuinely public surface and stay crawlable.
 export default function robots(): MetadataRoute.Robots {
-  const baseUrl = getEnvVar("NEXT_PUBLIC_APP_URL", "http://localhost:3000");
+  const baseUrl = getEnvVar(
+    process.env.NEXT_PUBLIC_APP_URL,
+    "http://localhost:3000",
+    "NEXT_PUBLIC_APP_URL"
+  );
 
   return {
     rules: {

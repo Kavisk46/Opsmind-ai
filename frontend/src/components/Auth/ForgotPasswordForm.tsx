@@ -5,8 +5,7 @@ import { useState } from "react";
 
 import { Form, useAppForm } from "@/components/Form";
 import { useAuth } from "@/components/Providers/AuthProvider";
-import { Button, buttonVariants } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 
 import {
   forgotPasswordSchema,
@@ -17,12 +16,17 @@ import { AuthErrorMessage } from "./AuthErrorMessage";
 import { AuthField } from "./AuthField";
 import { getAuthErrorMessage } from "./get-auth-error-message";
 
+// forgotPassword() always throws — the backend has no password-reset
+// endpoint at all (see auth-api.ts's notImplemented()). There used to be
+// a "check your email (demo)" success branch here that assumed a
+// resetToken would come back; it never could, since the throw above
+// always happens first. Removed rather than left as unreachable dead
+// code — the existing formError/AuthErrorMessage display below already
+// surfaces that real, honest error the same way every other TODO-stubbed
+// auth action in this app does.
 export function ForgotPasswordForm() {
   const { forgotPassword } = useAuth();
   const [formError, setFormError] = useState<string | null>(null);
-  const [sent, setSent] = useState<{ email: string; resetToken: string } | null>(
-    null
-  );
 
   const form = useAppForm<ForgotPasswordFormValues>({
     schema: forgotPasswordSchema,
@@ -32,30 +36,11 @@ export function ForgotPasswordForm() {
   const handleSubmit = async (values: ForgotPasswordFormValues) => {
     setFormError(null);
     try {
-      const { resetToken } = await forgotPassword(values.email);
-      setSent({ email: values.email, resetToken });
+      await forgotPassword(values.email);
     } catch (error) {
       setFormError(getAuthErrorMessage(error));
     }
   };
-
-  if (sent) {
-    const resetHref = `/reset-password?email=${encodeURIComponent(sent.email)}&token=${sent.resetToken}`;
-    return (
-      <AuthCard
-        title="Check your email"
-        subtitle={`We've sent password reset instructions to ${sent.email}.`}
-      >
-        <p className="text-sm text-muted-foreground">
-          There&apos;s no real inbox in this preview — use the link below to
-          continue.
-        </p>
-        <Link href={resetHref} className={cn(buttonVariants(), "w-full")}>
-          Continue to reset password (demo)
-        </Link>
-      </AuthCard>
-    );
-  }
 
   return (
     <AuthCard

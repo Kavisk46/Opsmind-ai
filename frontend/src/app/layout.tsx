@@ -19,7 +19,13 @@ const geistMono = Geist_Mono({
 // Same reasoning as lib/api/index.ts: the localhost fallback is only safe
 // for local development — a production build with this unset should log
 // loudly rather than silently baking an unusable metadataBase into OG tags.
-const appUrl = getEnvVar("NEXT_PUBLIC_APP_URL", "http://localhost:3000");
+// process.env.NEXT_PUBLIC_APP_URL must be accessed as a literal, static
+// expression here — see lib/env.ts's getEnvVar doc comment for why.
+const appUrl = getEnvVar(
+  process.env.NEXT_PUBLIC_APP_URL,
+  "http://localhost:3000",
+  "NEXT_PUBLIC_APP_URL"
+);
 
 if (isProd && !process.env.NEXT_PUBLIC_APP_URL) {
   logger.error(

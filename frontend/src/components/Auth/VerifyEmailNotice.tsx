@@ -1,89 +1,44 @@
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
-import { useState } from "react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 
-import { useAuth } from "@/components/Providers/AuthProvider";
-import { Button } from "@/components/ui/button";
-import { toast } from "@/lib/toast";
+import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 import { AuthCard } from "./AuthCard";
-import { AuthErrorMessage } from "./AuthErrorMessage";
-import { getAuthErrorMessage } from "./get-auth-error-message";
 
+// Email verification is intentionally deferred — the real backend
+// activates every account immediately on signup, with no verification
+// step at all (verified directly against backend/models/user.py and
+// backend/api/routes/users.py's create_user: no such flag, no such
+// branch). This page is still reached because SignupForm.tsx redirects
+// here after every signup (a route this fix was told not to change) —
+// its job now is to say that honestly, not simulate a "verify" flow the
+// backend has never had. No verifyEmail()/resendVerificationEmail()
+// calls here anymore: both only ever throw a real "not available"
+// error (see auth-api.ts), so pretending this page can act on them was
+// always going to fail the moment someone actually clicked the button.
 export function VerifyEmailNotice() {
-  const router = useRouter();
   const searchParams = useSearchParams();
-  const { verifyEmail, resendVerificationEmail } = useAuth();
-  const email = searchParams.get("email") ?? "";
-  const [isVerifying, setIsVerifying] = useState(false);
-  const [isResending, setIsResending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const handleVerifyNow = async () => {
-    setError(null);
-    setIsVerifying(true);
-    try {
-      await verifyEmail(email);
-      toast.success("Email verified — you can now sign in.");
-      router.push("/login");
-    } catch (err) {
-      setError(getAuthErrorMessage(err));
-    } finally {
-      setIsVerifying(false);
-    }
-  };
-
-  const handleResend = async () => {
-    setIsResending(true);
-    try {
-      await resendVerificationEmail(email);
-      toast.success("Verification email resent.");
-    } finally {
-      setIsResending(false);
-    }
-  };
-
-  if (!email) {
-    return (
-      <AuthCard
-        title="Check your email"
-        subtitle="We couldn't find a pending verification."
-      >
-        <p className="text-sm text-muted-foreground">
-          Please sign up or sign in again to receive a new verification email.
-        </p>
-      </AuthCard>
-    );
-  }
+  const email = searchParams.get("email");
 
   return (
     <AuthCard
-      title="Verify your email"
-      subtitle={`We've sent a verification link to ${email}.`}
+      title="You're all set"
+      subtitle={
+        email
+          ? `Your account (${email}) is already active.`
+          : "Your account is already active."
+      }
     >
       <p className="text-sm text-muted-foreground">
-        Click the link in that email to activate your account. There&apos;s no
-        real inbox in this preview, so use the button below to simulate it.
+        OpsMind AI doesn&apos;t require email verification — you can sign in
+        right away with the password you just created.
       </p>
-      {error && <AuthErrorMessage message={error} />}
-      <Button
-        type="button"
-        className="w-full"
-        disabled={isVerifying}
-        onClick={handleVerifyNow}
-      >
-        {isVerifying ? "Verifying..." : "Verify now (demo)"}
-      </Button>
-      <Button
-        type="button"
-        variant="ghost"
-        className="w-full"
-        disabled={isResending}
-        onClick={handleResend}
-      >
-        {isResending ? "Resending..." : "Resend email"}
-      </Button>
+      <Link href="/login" className={cn(buttonVariants(), "w-full")}>
+        Continue to sign in
+      </Link>
     </AuthCard>
   );
 }

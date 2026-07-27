@@ -61,7 +61,20 @@
       "Bash(node -e ' *)",
       "Bash(echo \"EXIT CODE: $?\")",
       "Bash(echo \"TSC EXIT: $?\")",
-      "Bash(npm ci *)"
+      "Bash(npm ci *)",
+      "Bash(NEXT_PUBLIC_API_URL=https://opsmind-ai-1-dptd.onrender.com NEXT_PUBLIC_APP_URL=https://opsmind-ai-pi.vercel.app npm run build)",
+      "Bash(xargs grep -l \"NEXT_PUBLIC_APP_URL\")",
+      "Bash(npx eslint *)",
+      "Bash(pip show *)",
+      "Bash(./venv/Scripts/python.exe -m pip list)",
+      "Bash(./.venv/Scripts/python.exe -m pip list)",
+      "Bash(./.venv/Scripts/python.exe -m pip install \"Authlib==1.3.2\")",
+      "Bash(./.venv/Scripts/python.exe -c ' *)",
+      "Bash(./.venv/Scripts/python.exe -m pip install ruff mypy)",
+      "Bash(./.venv/Scripts/python.exe -m ruff check .)",
+      "Bash(./.venv/Scripts/python.exe -m mypy .)",
+      "Bash(./.venv/Scripts/python.exe -m pytest -q)",
+      "Bash(rm -rf .next)"
     ]
   }
 }

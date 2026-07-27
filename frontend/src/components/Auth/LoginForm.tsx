@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
 
 import { Form, useAppForm } from "@/components/Form";
 import { useAuth } from "@/components/Providers/AuthProvider";
@@ -27,10 +27,32 @@ const REMEMBERED_EMAIL_KEY = "opsmind:remembered-email";
 
 export function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { login, loginAsGuest } = useAuth();
   const [formError, setFormError] = useState<string | null>(null);
   const [isGuestLoading, setIsGuestLoading] = useState(false);
   const rememberedEmail = getLocalStorageItem(REMEMBERED_EMAIL_KEY, "");
+
+  // The backend's OAuth callback (api/routes/oauth.py) redirects here
+  // with one of these query params when the flow fails on the
+  // provider's side, ours, or (GitHub only) the signed-in account has no
+  // verified email at all (see that route's two `except` branches) —
+  // there's no other way for a full-page-redirect flow to report an
+  // error back to this app.
+  useEffect(() => {
+    const error = searchParams.get("error");
+    if (!error) {
+      return;
+    }
+    // Syncing local state from the URL (an external source) on mount —
+    // not a derived-during-render value React could compute itself.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setFormError(
+      error === "oauth_no_email"
+        ? "That account has no verified email address — add one with your provider and try again."
+        : "Sign-in didn't complete. Please try again."
+    );
+  }, [searchParams]);
 
   const form = useAppForm<LoginFormValues>({
     schema: loginSchema,
@@ -160,12 +182,6 @@ export function LoginForm() {
           </p>
         </div>
       </AuthCard>
-
-      <p className="text-center text-xs text-muted-foreground">
-        Demo accounts (password <span className="font-mono">Password123!</span>
-        ): ava@opsmind.ai · noah@opsmind.ai (unverified) · priya@opsmind.ai
-        (requires OTP, code <span className="font-mono">123456</span>)
-      </p>
     </div>
   );
 }

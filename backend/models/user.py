@@ -52,7 +52,11 @@ class User(BaseModel):
     username: Mapped[str | None] = mapped_column(String, unique=True, index=True, nullable=True)
     name: Mapped[str] = mapped_column(String)
     # A bcrypt hash, never a plaintext password — see core/security.py.
-    password_hash: Mapped[str] = mapped_column(String)
+    # Nullable: a user who signs up via Google/GitHub/Microsoft OAuth
+    # (see services/auth_service.py's get_or_create_oauth_user) has no
+    # password at all — AuthService.login() must reject a password-login
+    # attempt against such a row rather than crash comparing against None.
+    password_hash: Mapped[str | None] = mapped_column(String, nullable=True)
     role: Mapped[str] = mapped_column(String, default=UserRole.MEMBER.value)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     team_id: Mapped[uuid.UUID | None] = mapped_column(

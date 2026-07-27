@@ -44,6 +44,45 @@ class Settings(BaseSettings):
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 30
 
+    # Refresh tokens are opaque random strings (see core/security.py),
+    # never JWTs — this app needs to be able to revoke one server-side
+    # (logout, rotation-reuse detection), which a self-contained JWT
+    # can't do without a separate blocklist anyway; storing a hash of an
+    # opaque token in the refresh_tokens table gets revocation for free.
+    refresh_token_expire_days: int = 30
+
+    # This backend's OWN public URL — needed to build the OAuth
+    # redirect_uri (e.g. "{backend_base_url}/auth/google/callback") that
+    # gets registered with each provider. Can't be derived reliably from
+    # an incoming request behind Render's proxy, so it's explicit config
+    # instead.
+    backend_base_url: str = "http://localhost:8000"
+    # Where a completed OAuth login sends the user's BROWSER back to —
+    # the frontend, not this API. The callback route sets auth cookies
+    # then issues a 302 here.
+    frontend_url: str = "http://localhost:3000"
+
+    # OAuth providers — each pair defaults to None so this app boots and
+    # every non-OAuth feature works with zero setup; api/routes/oauth.py
+    # raises a clear error (not a cryptic Authlib one) if a login is
+    # attempted for a provider without real credentials configured. See
+    # docs/oauth-setup.md for how to obtain real values from each
+    # provider's own developer console.
+    google_client_id: str | None = None
+    google_client_secret: str | None = None
+
+    github_client_id: str | None = None
+    github_client_secret: str | None = None
+
+    microsoft_client_id: str | None = None
+    microsoft_client_secret: str | None = None
+    # "common" accepts sign-in from BOTH personal Microsoft accounts and
+    # work/school (Azure AD) accounts — the same "anyone with an account"
+    # openness Google/GitHub sign-in have by default. A real internal
+    # tool restricted to one organization would set this to that specific
+    # Azure AD tenant ID instead (see docs/oauth-setup.md).
+    microsoft_tenant_id: str = "common"
+
     # Which origins may make cross-origin requests to this API (see
     # main.py's CORSMiddleware). A comma-separated STRING, not a
     # list[str] field — pydantic-settings would otherwise expect a JSON

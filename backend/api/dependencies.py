@@ -1,11 +1,12 @@
 import uuid
 
 import jwt
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config import settings
+from core.cookies import ACCESS_TOKEN_COOKIE_NAME
 from core.database import async_session_factory, get_db
 from core.embeddings import SentenceTransformerEmbeddingModel
 from core.rate_limit import RateLimiter
@@ -34,27 +35,43 @@ from services.tools import DocumentMetadataTool, RAGRetrievalTool
 # tokenUrl points Swagger UI's "Authorize" button at the login route (even
 # though that route itself takes JSON, not the form-encoded body this
 # class is named after) — this is purely a docs/UI hint, it doesn't change
-# how OUR route parses requests. FastAPI also uses this to extract the
-# `Authorization: Bearer <token>` header automatically, which is the part
-# that actually matters here.
-_oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
+# how OUR route parses requests. auto_error=False is what makes this
+# optional rather than an automatic 401: a real browser request carries
+# the access token in the httpOnly cookie (see core/cookies.py), not this
+# header, so a MISSING header here is normal, not an error — get_current_user
+# below is what decides whether the cookie fills the gap before actually
+# failing.
+_oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login", auto_error=False)
 
 
 async def get_current_user(
-    token: str = Depends(_oauth2_scheme),
+    request: Request,
+    header_token: str | None = Depends(_oauth2_scheme),
     db: AsyncSession = Depends(get_db),
 ) -> User:
     """The dependency every protected route will declare. Decodes and
-    verifies the bearer token, then loads the user it names. Any failure
-    along the way — bad signature, expired token, user since deleted —
-    collapses to the same 401; a caller doesn't get to distinguish "your
-    token is malformed" from "that user doesn't exist anymore."
+    verifies an access token — from EITHER the httpOnly cookie a real
+    browser sends automatically, or an `Authorization: Bearer` header (an
+    API client, or this project's own test suite, which has always used
+    the header and is left unchanged) — then loads the user it names. Any
+    failure along the way — no token in either place, bad signature,
+    expired token, user since deleted — collapses to the same 401; a
+    caller doesn't get to distinguish one cause from another.
+
+    Header checked first, purely for continuity with this project's
+    existing tests/API-client usage; a real frontend request has only
+    the cookie, so which one wins first never actually matters in
+    practice — only one is ever present at a time.
     """
     credentials_error = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
+
+    token = header_token or request.cookies.get(ACCESS_TOKEN_COOKIE_NAME)
+    if token is None:
+        raise credentials_error
 
     try:
         subject = decode_access_token(token)

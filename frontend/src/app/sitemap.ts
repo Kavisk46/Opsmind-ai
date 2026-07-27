@@ -7,7 +7,11 @@ import { getEnvVar } from "@/lib/env";
 // points only. Extend with real content routes if/when this app grows a
 // public marketing surface.
 export default function sitemap(): MetadataRoute.Sitemap {
-  const baseUrl = getEnvVar("NEXT_PUBLIC_APP_URL", "http://localhost:3000");
+  const baseUrl = getEnvVar(
+    process.env.NEXT_PUBLIC_APP_URL,
+    "http://localhost:3000",
+    "NEXT_PUBLIC_APP_URL"
+  );
   const lastModified = new Date();
 
   return [

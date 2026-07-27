@@ -1,27 +1,37 @@
 "use client";
 
+import { useAuth } from "@/components/Providers/AuthProvider";
 import { Button } from "@/components/ui/button";
-import { toast } from "@/lib/toast";
 
-const SOCIAL_PROVIDERS = ["Google", "GitHub", "Microsoft"] as const;
-
-// UI-only placeholders — no real OAuth wiring per this module's scope.
 export function SocialLoginButtons() {
+  const { loginWithGoogle, loginWithGithub, loginWithMicrosoft } = useAuth();
+
   return (
     <div className="space-y-2">
-      {SOCIAL_PROVIDERS.map((provider) => (
-        <Button
-          key={provider}
-          type="button"
-          variant="outline"
-          className="w-full"
-          onClick={() =>
-            toast(`${provider} sign-in isn't available in this preview.`)
-          }
-        >
-          Continue with {provider}
-        </Button>
-      ))}
+      <Button
+        type="button"
+        variant="outline"
+        className="w-full"
+        onClick={loginWithGoogle}
+      >
+        Continue with Google
+      </Button>
+      <Button
+        type="button"
+        variant="outline"
+        className="w-full"
+        onClick={loginWithGithub}
+      >
+        Continue with GitHub
+      </Button>
+      <Button
+        type="button"
+        variant="outline"
+        className="w-full"
+        onClick={loginWithMicrosoft}
+      >
+        Continue with Microsoft
+      </Button>
     </div>
   );
 }

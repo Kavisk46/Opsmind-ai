@@ -1,24 +1,39 @@
-// Two jobs: (1) a client-visible marker so proxy.ts (route protection)
-// has something to check for — it only checks PRESENCE
-// (request.cookies.has(...)), never the value, so nothing there needed
-// to change — and (2), since this integration, the ACTUAL carrier for
-// the real JWT across a page refresh. lib/api/token.ts's in-memory
-// `authToken` is wiped on every reload by design (documented there as
-// an XSS mitigation: never put a token somewhere `window.localStorage`
-// or an injected script can trivially read); this cookie is what
-// AuthProvider.tsx reads on mount to rehydrate that in-memory value via
-// getSessionCookie() below.
+// A client-visible marker so proxy.ts (route protection) has something
+// to check for on the FRONTEND's own domain — it only checks PRESENCE
+// (request.cookies.has(...)), never the value, so nothing there needs to
+// change based on what this file stores.
 //
-// Honest security note, not glossed over: a plain (non-httpOnly) cookie
-// set from client-side JS, as this is, has the SAME XSS-readability
-// exposure as localStorage would — document.cookie is just as reachable
-// by an injected script. The properly-hardened version of this would
-// have the BACKEND set an httpOnly cookie directly on POST /auth/login,
-// which this integration doesn't do because the backend currently
-// returns the token in a JSON body only, and changing that is a backend
-// change outside this integration's scope. This is a deliberate,
-// documented trade-off, not an oversight.
+// Why this has to exist AT ALL post-OAuth-migration: the real session
+// lives entirely in httpOnly `access_token`/`refresh_token` cookies the
+// BACKEND sets (see backend/core/cookies.py) — but those are scoped to
+// the BACKEND's own origin (Render), a genuinely different domain than
+// this frontend (Vercel). A cookie set by one origin is never sent to,
+// or visible from, a different origin's server — that's the browser's
+// own same-origin cookie jar, not something any code here controls. So
+// proxy.ts, which only ever sees cookies sent to THIS app's domain, can
+// never directly check the real session cookies no matter what name it
+// looks for. This marker is the bridge: AuthProvider.tsx sets it, on
+// THIS domain, once it has confirmed (via a real `GET /users/me` call)
+// that a real session exists — real or guest, this is the ONLY thing
+// proxy.ts ever checks.
+//
+// This was previously narrowed to guest-mode-only during the OAuth
+// migration (a real regression — see AuthProvider.tsx's login()/session-
+// restore effect for the fix): once nothing called setSessionCookie()
+// for a real login anymore, proxy.ts could never recognize a real,
+// successfully-authenticated user, and bounced them straight back to
+// /login. Restoring it as a marker BOTH paths set fixes that without
+// changing proxy.ts's own logic at all — presence-only checking was
+// never a real security boundary (that's `get_current_user` on the
+// backend, verifying a signed JWT) and still isn't; this file has never
+// stored anything an XSS payload could use for anything real.
 export const SESSION_COOKIE_NAME = "opsmind_session";
+
+// The value real (non-guest) sessions store — distinguishable from
+// GUEST_AUTH_TOKEN (guest-mode.ts) so AuthProvider's session-restore
+// effect knows which branch to take, but otherwise not a secret: proxy.ts
+// never inspects it, only whether the cookie is present at all.
+export const AUTHENTICATED_SESSION_MARKER = "authenticated";
 
 export function setSessionCookie(token: string): void {
   document.cookie = `${SESSION_COOKIE_NAME}=${encodeURIComponent(token)}; path=/; max-age=${60 * 60 * 24}`;

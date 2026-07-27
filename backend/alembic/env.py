@@ -13,6 +13,8 @@ from models.base import Base
 from models.conversation import Conversation  # noqa: F401
 from models.document import Document  # noqa: F401
 from models.message import Message  # noqa: F401
+from models.oauth_account import OAuthAccount  # noqa: F401
+from models.refresh_token import RefreshToken  # noqa: F401
 from models.team import Team  # noqa: F401
 from models.user import User  # noqa: F401
 

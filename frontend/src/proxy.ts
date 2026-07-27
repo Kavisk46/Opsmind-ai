@@ -2,10 +2,16 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { SESSION_COOKIE_NAME } from "@/components/Auth/session-cookie";
 
-// Placeholder route protection: checks for the mock session cookie set by
-// AuthProvider (see components/Auth/session-cookie.ts). A real
-// implementation would verify a signed session/JWT here instead of just
-// checking for presence.
+// Route protection: checks for the session marker cookie AuthProvider.tsx
+// sets on THIS app's own domain, for both real and guest sessions (see
+// components/Auth/session-cookie.ts's doc comment for exactly why this
+// indirection is required — the real session cookies live on the
+// backend's own, different origin and are never visible here directly).
+// Deliberately presence-only, not JWT verification: the real security
+// boundary is the backend's get_current_user dependency, which verifies
+// a signed token on every API call regardless of what this middleware
+// decides — this layer only ever controls which PAGE gets served, never
+// which data a request can read.
 const AUTH_PATHS = [
   "/login",
   "/signup",

@@ -20,7 +20,18 @@ export type { RetryConfig } from "./retry";
 // missing (that would fail the build for any page merely importing this
 // module) — instead it logs loudly so a misconfigured production deploy is
 // visible in server logs rather than silently pointing at localhost.
-const apiBaseUrl = getEnvVar("NEXT_PUBLIC_API_URL", "http://localhost:8000");
+//
+// process.env.NEXT_PUBLIC_API_URL is accessed here as a literal, static
+// expression — REQUIRED for Next.js to inline it into the client bundle
+// at build time (see lib/env.ts's getEnvVar doc comment for the exact
+// bug this fixes: a dynamic `process.env[key]` lookup inside getEnvVar
+// itself is invisible to that build-time pass and always evaluates to
+// undefined in the browser, regardless of what's set in Vercel/Render).
+const apiBaseUrl = getEnvVar(
+  process.env.NEXT_PUBLIC_API_URL,
+  "http://localhost:8000",
+  "NEXT_PUBLIC_API_URL"
+);
 
 if (isProd && !process.env.NEXT_PUBLIC_API_URL) {
   logger.error(
