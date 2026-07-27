@@ -1,6 +1,28 @@
+from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from core.config import settings
+
+# Managed Postgres providers (Neon, Supabase, RDS, ...) hand out
+# connection strings with libpq-style query params — sslmode,
+# channel_binding — meant for psycopg2/libpq clients. The asyncpg
+# dialect's create_connect_args() forwards EVERY url query param
+# verbatim into asyncpg.connect(**opts) (see
+# sqlalchemy/dialects/postgresql/asyncpg.py), and asyncpg.connect() has
+# no sslmode or channel_binding parameter at all — only `ssl`, which
+# happens to accept the exact same string values ('require',
+# 'verify-full', ...) asyncpg's own docs confirm this. So: translate
+# sslmode into the connect_args asyncpg actually understands, then drop
+# both keys from the URL so they're never merged into opts a second time.
+# channel_binding has no asyncpg equivalent — dropped outright, since
+# asyncpg already only ever negotiates SCRAM-SHA-256 regardless.
+# difference_update_query is SQLAlchemy's own URL API for this — no
+# manual string/regex parsing of the connection string.
+_url = make_url(settings.database_url)
+_connect_args = {}
+if "sslmode" in _url.query:
+    _connect_args["ssl"] = _url.query["sslmode"]
+_url = _url.difference_update_query(["sslmode", "channel_binding"])
 
 # One engine per process. SQLAlchemy pools connections internally, so this
 # is created once at import time and reused across every request rather
@@ -21,10 +43,11 @@ from core.config import settings
 # transient failure a Docker deployment (Postgres and the backend as
 # independently restartable containers) needs to tolerate.
 engine = create_async_engine(
-    settings.database_url,
+    _url,
     pool_size=settings.db_pool_size,
     max_overflow=settings.db_max_overflow,
     pool_pre_ping=True,
+    connect_args=_connect_args,
 )
 
 async_session_factory = async_sessionmaker(engine, expire_on_commit=False)
