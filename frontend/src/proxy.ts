@@ -1,3 +1,4 @@
+/* eslint-disable no-console -- temporary debug instrumentation, remove after diagnosis */
 import { NextResponse, type NextRequest } from "next/server";
 
 import { SESSION_COOKIE_NAME } from "@/components/Auth/session-cookie";
@@ -40,13 +41,24 @@ export function proxy(request: NextRequest) {
   if (!hasSession && !matchesPath(AUTH_PATHS, pathname)) {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("from", pathname);
+    console.log({
+      pathname,
+      hasSessionCookie: hasSession,
+      redirecting: loginUrl.toString(),
+    });
     return NextResponse.redirect(loginUrl);
   }
 
   if (hasSession && matchesPath(GUEST_ONLY_PATHS, pathname)) {
+    console.log({
+      pathname,
+      hasSessionCookie: hasSession,
+      redirecting: new URL("/", request.url).toString(),
+    });
     return NextResponse.redirect(new URL("/", request.url));
   }
 
+  console.log({ pathname, hasSessionCookie: hasSession, redirecting: null });
   return NextResponse.next();
 }
 

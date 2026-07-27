@@ -1,3 +1,4 @@
+/* eslint-disable no-console -- temporary debug instrumentation, remove after diagnosis */
 import type { Metadata } from "next";
 
 import { Dashboard } from "@/components/Dashboard";
@@ -8,6 +9,7 @@ export const metadata: Metadata = {
 };
 
 export default function Home() {
+  console.log("DASHBOARD LOADED");
   return (
     <>
       <PageHeader

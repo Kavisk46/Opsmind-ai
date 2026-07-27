@@ -1,3 +1,4 @@
+/* eslint-disable no-console -- temporary debug instrumentation, remove after diagnosis */
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 
@@ -78,6 +79,7 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  console.log("ROOT LAYOUT");
   return (
     <html
       lang="en"

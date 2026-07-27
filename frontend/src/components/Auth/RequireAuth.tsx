@@ -1,4 +1,5 @@
 "use client";
+/* eslint-disable no-console -- temporary debug instrumentation, remove after diagnosis */
 
 import { useRouter } from "next/navigation";
 import { useEffect, type ReactNode } from "react";
@@ -22,10 +23,13 @@ interface RequireAuthProps {
 // get_current_user check on every actual data request.
 export function RequireAuth({ children }: RequireAuthProps) {
   const router = useRouter();
-  const { status } = useAuth();
+  const { status, user } = useAuth();
+
+  console.log("REQUIRE AUTH RENDER", { status, user });
 
   useEffect(() => {
     if (status === "unauthenticated") {
+      console.log("REDIRECTING TO LOGIN");
       router.replace("/login");
     }
   }, [status, router]);

@@ -1,4 +1,5 @@
 "use client";
+/* eslint-disable no-console -- temporary debug instrumentation, remove after diagnosis */
 
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -132,6 +133,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [status, setStatus] = useState<AuthStatus>("loading");
   const [isGuest, setIsGuest] = useState(false);
 
+  useEffect(() => {
+    console.log("AUTH STATUS", status);
+  }, [status]);
+
+  useEffect(() => {
+    console.log("AUTH USER", user);
+  }, [user]);
+
   const login = useCallback(
     async (credentials: AuthCredentials): Promise<LoginResult> => {
       // POST /auth/login sets the REAL httpOnly session cookies directly
@@ -151,6 +160,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setSessionCookie(AUTHENTICATED_SESSION_MARKER);
       setUser(result.user);
       setStatus("authenticated");
+      console.log("SET AUTHENTICATED");
       setIsGuest(false);
       return { outcome: "authenticated", email: result.user.email };
     },
@@ -178,6 +188,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     setSessionCookie(GUEST_AUTH_TOKEN);
     setUser(GUEST_USER);
     setStatus("authenticated");
+    console.log("SET AUTHENTICATED");
     setIsGuest(true);
   }, []);
 
@@ -202,6 +213,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         setAuthToken(GUEST_AUTH_TOKEN);
         setUser(GUEST_USER);
         setStatus("authenticated");
+        console.log("SET AUTHENTICATED");
         setIsGuest(true);
         return;
       }
@@ -221,6 +233,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         setSessionCookie(AUTHENTICATED_SESSION_MARKER);
         setUser(restoredUser);
         setStatus("authenticated");
+        console.log("SET AUTHENTICATED");
         setIsGuest(false);
         // Setting the cookie above doesn't retroactively re-run
         // proxy.ts's redirect for the CURRENT page — without this, an

@@ -1,4 +1,5 @@
 "use client";
+/* eslint-disable no-console -- temporary debug instrumentation, remove after diagnosis */
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -66,10 +67,12 @@ export function LoginForm() {
   const handleSubmit = async (values: LoginFormValues) => {
     setFormError(null);
     try {
+      console.log("LOGIN START");
       const result = await login({
         email: values.email,
         password: values.password,
       });
+      console.log("LOGIN SUCCESS", result);
 
       if (values.rememberMe) {
         setLocalStorageItem(REMEMBERED_EMAIL_KEY, values.email);
@@ -85,8 +88,11 @@ export function LoginForm() {
         router.push(`/verify-email?email=${encodeURIComponent(result.email)}`);
         return;
       }
+      console.log("ROUTER PUSH");
       router.push("/");
+      console.log("ROUTER PUSH CALLED");
     } catch (error) {
+      console.log("LOGIN ERROR", error);
       setFormError(getAuthErrorMessage(error));
     }
   };
