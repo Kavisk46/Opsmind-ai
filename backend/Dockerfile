@@ -71,4 +71,15 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
     CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health', timeout=3).status == 200 else 1)"
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Migrations run as part of every container start, not a manually-typed
+# platform dashboard field — nothing in this repo's deployment path ever
+# invoked `alembic upgrade head` otherwise (only README's local "Getting
+# Started" section did), which is exactly why `users` and every other
+# table never existed on a fresh Neon database despite the migration
+# files themselves being complete and correct. Shell form (not exec-array
+# JSON form) specifically so `&&` works: alembic runs to completion and
+# exits 0 before uvicorn ever starts, and a failed migration fails the
+# container/health check loudly instead of booting a server with no
+# schema. Idempotent on every restart — Alembic's own alembic_version
+# table means "already at head" is a fast no-op, not a re-apply.
+CMD alembic upgrade head && uvicorn main:app --host 0.0.0.0 --port 8000
