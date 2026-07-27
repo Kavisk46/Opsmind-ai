@@ -8,7 +8,7 @@ function StatCardSkeleton() {
         <div className="min-w-0 flex-1 space-y-2">
           <Skeleton className="h-3.5 w-20" />
           <Skeleton className="h-7 w-16" />
-          <Skeleton className="h-3.5 w-12" />
+          <Skeleton className="h-3.5 w-24" />
         </div>
         <Skeleton className="h-10 w-10 shrink-0 rounded-full" />
       </CardContent>
@@ -30,9 +30,9 @@ function ChartCardSkeleton({ className }: { className?: string }) {
   );
 }
 
-function ListCardSkeleton({ rows }: { rows: number }) {
+function ListCardSkeleton({ rows, className }: { rows: number; className?: string }) {
   return (
-    <Card>
+    <Card className={className}>
       <CardHeader>
         <Skeleton className="h-5 w-40" />
         <Skeleton className="h-4 w-56" />
@@ -52,45 +52,76 @@ function ListCardSkeleton({ rows }: { rows: number }) {
   );
 }
 
-// Reused loading state while Dashboard's mock data "loads" — mirrors the
-// real layout's shape (hero, stat cards, chart cards, activity list) so the
-// page doesn't jump around once data resolves, matching the sibling
-// Settings/Analytics/KnowledgeBase pages that already do this.
+function HealthCardSkeleton() {
+  return (
+    <Card>
+      <CardContent className="space-y-3 p-4 pt-4 sm:p-4 sm:pt-4">
+        <div className="flex items-center justify-between">
+          <Skeleton className="h-4 w-16" />
+          <Skeleton className="h-2.5 w-2.5 rounded-full" />
+        </div>
+        <Skeleton className="h-3 w-full" />
+      </CardContent>
+    </Card>
+  );
+}
+
+// Mirrors the real Dashboard's layout (header, stat grid, insights, recent
+// lists, timeline, charts, health, quick access) so the page doesn't jump
+// around once the simulated load finishes.
 export function DashboardSkeleton() {
   return (
-    <div className="space-y-6" role="status" aria-label="Loading dashboard">
+    <div className="space-y-8" role="status" aria-label="Loading dashboard">
       <Card>
-        <CardContent className="flex flex-col gap-3 p-6 sm:flex-row sm:items-center sm:justify-between">
-          <div className="space-y-2">
-            <Skeleton className="h-3 w-32" />
-            <Skeleton className="h-5 w-40" />
-            <Skeleton className="h-4 w-64" />
+        <CardContent className="flex flex-col gap-6 p-6 sm:p-8">
+          <div className="flex items-start gap-3">
+            <Skeleton className="mt-1 h-6 w-6 shrink-0 rounded-full" />
+            <div className="space-y-2">
+              <Skeleton className="h-3 w-32" />
+              <Skeleton className="h-7 w-48" />
+              <Skeleton className="h-4 w-40" />
+            </div>
           </div>
-          <div className="flex gap-2">
-            <Skeleton className="h-9 w-36" />
-            <Skeleton className="h-9 w-32" />
+          <div className="grid grid-cols-2 gap-2 sm:flex">
+            {Array.from({ length: 4 }).map((_, index) => (
+              <Skeleton key={index} className="h-9 w-full sm:w-36" />
+            ))}
           </div>
         </CardContent>
       </Card>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {Array.from({ length: 4 }).map((_, index) => (
+        {Array.from({ length: 8 }).map((_, index) => (
           <StatCardSkeleton key={index} />
         ))}
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <ChartCardSkeleton className="lg:col-span-2" />
-        <ListCardSkeleton rows={3} />
+      <ChartCardSkeleton />
+
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+        <ListCardSkeleton rows={4} className="xl:col-span-2" />
+        <ListCardSkeleton rows={4} />
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        {Array.from({ length: 3 }).map((_, index) => (
+      <ListCardSkeleton rows={5} />
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        {Array.from({ length: 4 }).map((_, index) => (
           <ChartCardSkeleton key={index} />
         ))}
       </div>
 
-      <ListCardSkeleton rows={5} />
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        {Array.from({ length: 5 }).map((_, index) => (
+          <HealthCardSkeleton key={index} />
+        ))}
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {Array.from({ length: 8 }).map((_, index) => (
+          <Skeleton key={index} className="h-24 w-full rounded-lg" />
+        ))}
+      </div>
     </div>
   );
 }

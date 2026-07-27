@@ -1,25 +1,17 @@
 "use client";
 
-import dynamic from "next/dynamic";
-
 import { useSimulatedLoad } from "@/hooks/use-simulated-load";
 
 import { AIInsights } from "./AIInsights";
 import { AnalyticsCharts } from "./AnalyticsCharts";
+import { DashboardHeader } from "./DashboardHeader";
 import { DashboardSkeleton } from "./DashboardSkeleton";
-import { HeroSection } from "./HeroSection";
-import { QuickActions } from "./QuickActions";
-import { RecentActivity } from "./RecentActivity";
-import { ServerStatus } from "./ServerStatus";
-import { StatsCards } from "./StatsCards";
-import { SystemHealth } from "./SystemHealth";
-import { TeamWorkspace } from "./TeamWorkspace";
-
-// Dynamically imported so recharts (and this chart's own bundle weight)
-// loads in its own chunk instead of the Dashboard's main bundle.
-const AIStatus = dynamic(() =>
-  import("./AIStatus").then((mod) => mod.AIStatus)
-);
+import { HealthCards } from "./HealthCards";
+import { QuickAccess } from "./QuickAccess";
+import { RecentConversations } from "./RecentConversations";
+import { RecentDocuments } from "./RecentDocuments";
+import { StatsGrid } from "./StatsGrid";
+import { Timeline } from "./Timeline";
 
 export function Dashboard() {
   const isLoading = useSimulatedLoad();
@@ -29,19 +21,18 @@ export function Dashboard() {
   }
 
   return (
-    <div className="space-y-6">
-      <HeroSection />
-      <StatsCards />
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <AIStatus />
-        <TeamWorkspace />
-      </div>
-      <AnalyticsCharts />
+    <div className="space-y-8">
+      <DashboardHeader />
+      <StatsGrid />
       <AIInsights />
-      <SystemHealth />
-      <ServerStatus />
-      <QuickActions />
-      <RecentActivity />
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+        <RecentDocuments className="xl:col-span-2" />
+        <RecentConversations />
+      </div>
+      <Timeline />
+      <AnalyticsCharts />
+      <HealthCards />
+      <QuickAccess />
     </div>
   );
 }

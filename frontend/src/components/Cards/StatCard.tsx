@@ -13,6 +13,8 @@ export interface StatCardProps {
   change: number | null;
   isPositive?: boolean;
   icon: LucideIcon;
+  /** Optional third line of context below the trend (e.g. "12 active in the last hour"). */
+  description?: string;
 }
 
 export function StatCard({
@@ -21,6 +23,7 @@ export function StatCard({
   change,
   isPositive = true,
   icon: Icon,
+  description,
 }: StatCardProps) {
   const isIncrease = change !== null && change >= 0;
   const TrendIcon = isIncrease ? TrendingUp : TrendingDown;
@@ -53,6 +56,11 @@ export function StatCard({
                 {isPositive ? "improvement" : "decline"} vs. last period
               </span>
             </div>
+          )}
+          {description && (
+            <p className="mt-2 truncate text-xs text-muted-foreground">
+              {description}
+            </p>
           )}
         </div>
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground">
