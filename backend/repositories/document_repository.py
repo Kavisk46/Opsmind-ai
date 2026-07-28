@@ -1,19 +1,36 @@
 import uuid
+from datetime import datetime
 from typing import Literal
 
-from sqlalchemy import func, select
+from sqlalchemy import UnaryExpression, func, select
 
 from models.document import Document
 from repositories.base import BaseRepository
 
 SortOption = Literal["newest", "oldest", "largest", "smallest"]
 
-_SORT_COLUMNS = {
-    "newest": Document.created_at.desc(),
-    "oldest": Document.created_at.asc(),
-    "largest": Document.size_bytes.desc(),
-    "smallest": Document.size_bytes.asc(),
-}
+
+def _sort_clause(sort: SortOption) -> UnaryExpression[datetime] | UnaryExpression[int]:
+    # A plain {sort: column.desc()/.asc()} dict literal is what produced
+    # mypy's "object" inference: created_at.desc() and size_bytes.desc()
+    # are UnaryExpression[datetime] and UnaryExpression[int] respectively
+    # — different instantiations of the same INVARIANT generic — and a
+    # dict literal's value type is the JOIN of its values' types, which
+    # mypy can only express as `object` when it can't find a common
+    # parameterization (UnaryExpression[object] doesn't work either:
+    # invariance means UnaryExpression[datetime] is not assignable to
+    # UnaryExpression[object], even though datetime is an object). The
+    # honest, precise type for "one of these two concrete branches" is
+    # their literal union — both members are real, concrete SQLAlchemy
+    # types, so this is strictly more precise than the dict version ever
+    # was, not a workaround.
+    if sort == "newest":
+        return Document.created_at.desc()
+    if sort == "oldest":
+        return Document.created_at.asc()
+    if sort == "largest":
+        return Document.size_bytes.desc()
+    return Document.size_bytes.asc()
 
 
 class DocumentRepository(BaseRepository[Document]):
@@ -79,7 +96,7 @@ class DocumentRepository(BaseRepository[Document]):
             stmt = stmt.where(Document.filename.ilike(f"%{query}%"))
         if content_type:
             stmt = stmt.where(Document.content_type == content_type)
-        stmt = stmt.order_by(_SORT_COLUMNS[sort])
+        stmt = stmt.order_by(_sort_clause(sort))
 
         result = await self.db.execute(stmt)
         return list(result.scalars().all())
@@ -107,7 +124,12 @@ class DocumentRepository(BaseRepository[Document]):
             .where(Document.owner_id == owner_id)
             .group_by(Document.content_type)
         )
-        return dict(result.all())
+        # dict(result.all()) fails mypy: a Row[tuple[str, int]] is
+        # iterable/unpackable at runtime but isn't recognized by mypy as
+        # a plain tuple[str, int], which is what dict()'s constructor
+        # overload requires. Unpacking each Row via a for-loop uses
+        # __iter__ typing instead, which mypy resolves correctly.
+        return {content_type: count for content_type, count in result.all()}
 
     async def list_recent_by_owner(
         self, owner_id: uuid.UUID, limit: int
