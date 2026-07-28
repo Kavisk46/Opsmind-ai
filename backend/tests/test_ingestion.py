@@ -178,15 +178,22 @@ def test_unsupported_content_type_is_rejected_at_upload_time(client):
     # minutes later in the background (see git history / the previous
     # phase's write-up) — wasted storage and bandwidth for something
     # rejectable in milliseconds.
+    #
+    # image/png used to be the example here — it's since been added to
+    # DocumentService.ACCEPTED_UPLOAD_CONTENT_TYPES (see
+    # test_documents.py's test_uploading_a_png_is_accepted_and_ends_up_ready_not_failed
+    # for that now-legitimate case) — application/zip has no
+    # text-extraction path and was never proposed as an upload type at
+    # all, so it's the correct "genuinely unsupported" example now.
     headers = _auth_headers(client, email="ingest-user3@example.com")
     response = client.post(
         "/documents",
         headers=headers,
         files={
             "file": (
-                "image.png",
-                io.BytesIO(b"not really a png, but content_type is unsupported"),
-                "image/png",
+                "archive.zip",
+                io.BytesIO(b"PK\x03\x04 not really a zip, but content_type is unsupported"),
+                "application/zip",
             )
         },
     )

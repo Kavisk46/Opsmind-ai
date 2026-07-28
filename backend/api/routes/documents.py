@@ -5,16 +5,20 @@ from fastapi import (
     BackgroundTasks,
     Depends,
     HTTPException,
+    Query,
     UploadFile,
     status,
 )
+from fastapi.responses import Response
 
 from api.dependencies import get_current_user, get_document_service, get_ingestion_service
 from models.user import User
-from schemas.document import DocumentResponse, DocumentStatusResponse
+from repositories.document_repository import SortOption
+from schemas.document import DocumentResponse, DocumentStatsResponse, DocumentStatusResponse
 from services.document_service import (
     DocumentNotFoundError,
     DocumentService,
+    DuplicateFilenameError,
     EmptyFileError,
     FileTooLargeError,
     UnsupportedFileTypeError,
@@ -58,7 +62,18 @@ async def upload_document(
         # exactly what 415 Unsupported Media Type means.
         raise HTTPException(
             status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
-            detail="Unsupported file type. Supported types: .txt, .md, .pdf.",
+            detail=(
+                "Unsupported file type. Supported types: .txt, .md, .pdf, "
+                ".docx, .csv, .png, .jpg, .jpeg."
+            ),
+        ) from error
+    except DuplicateFilenameError as error:
+        # 409 Conflict: the request is well-formed and the file type is
+        # fine — it's specifically the current STATE (an existing document
+        # with this exact name) that makes it impossible to fulfill as-is,
+        # which is exactly what 409 means as opposed to 400/415.
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=str(error)
         ) from error
 
     # Scheduled to run AFTER this response is sent — the client gets 202
@@ -85,6 +100,58 @@ async def list_documents(
     service: DocumentService = Depends(get_document_service),
 ):
     return await service.list_documents(owner_id=current_user.id)
+
+
+# Declared BEFORE /{document_id} deliberately — FastAPI matches routes in
+# declaration order, and both "/search" and "/stats" are otherwise
+# indistinguishable, path-shape-wise, from a request for
+# /documents/{document_id}. Declared after it, either would 422 trying
+# to parse "search"/"stats" as a UUID instead of ever reaching this
+# handler.
+@router.get("/search", response_model=list[DocumentResponse])
+async def search_documents(
+    q: str | None = Query(default=None, description="Matched against filename, case-insensitive."),
+    content_type: str | None = Query(default=None, description="Exact MIME type filter."),
+    sort: SortOption = Query(default="newest"),
+    current_user: User = Depends(get_current_user),
+    service: DocumentService = Depends(get_document_service),
+):
+    return await service.search_documents(
+        owner_id=current_user.id, query=q, content_type=content_type, sort=sort
+    )
+
+
+@router.get("/stats", response_model=DocumentStatsResponse)
+async def get_document_stats(
+    current_user: User = Depends(get_current_user),
+    service: DocumentService = Depends(get_document_service),
+):
+    return await service.get_stats(owner_id=current_user.id)
+
+
+@router.get("/download/{document_id}")
+async def download_document(
+    document_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    service: DocumentService = Depends(get_document_service),
+):
+    try:
+        document, data = await service.download_document(
+            owner_id=current_user.id, document_id=document_id
+        )
+    except DocumentNotFoundError as error:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Document not found."
+        ) from error
+
+    # filename is already sanitized at upload time (core/filenames.py) —
+    # no control characters, no quote characters, nothing that could
+    # break out of this header's quoted value or inject a second header.
+    return Response(
+        content=data,
+        media_type=document.content_type,
+        headers={"Content-Disposition": f'attachment; filename="{document.filename}"'},
+    )
 
 
 @router.get("/{document_id}", response_model=DocumentResponse)

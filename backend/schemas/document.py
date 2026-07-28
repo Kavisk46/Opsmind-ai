@@ -35,3 +35,20 @@ class DocumentStatusResponse(BaseModel):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class DocumentStatsResponse(BaseModel):
+    """API-facing contract for GET /documents/stats. Mirrors
+    services.document_service.DocumentStats field-for-field —
+    from_attributes lets this validate directly off that dataclass
+    (including recursively converting its `recent_uploads` list of real
+    Document ORM rows into DocumentResponse instances), no manual mapping
+    step needed in the route.
+    """
+
+    total_documents: int
+    total_storage_bytes: int
+    documents_by_type: dict[str, int]
+    recent_uploads: list[DocumentResponse]
+
+    model_config = ConfigDict(from_attributes=True)

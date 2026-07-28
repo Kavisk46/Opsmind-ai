@@ -74,7 +74,27 @@
       "Bash(./.venv/Scripts/python.exe -m ruff check .)",
       "Bash(./.venv/Scripts/python.exe -m mypy .)",
       "Bash(./.venv/Scripts/python.exe -m pytest -q)",
-      "Bash(rm -rf .next)"
+      "Bash(rm -rf .next)",
+      "Bash(NEXT_PUBLIC_API_URL=\"https://opsmind-audit-test.onrender.com\" NEXT_PUBLIC_APP_URL=\"https://opsmind-audit-test.vercel.app\" npm run build)",
+      "Bash(echo \"EXIT_CODE=$?\")",
+      "Bash(vercel --version)",
+      "Bash(vercel whoami *)",
+      "Bash(render --version)",
+      "Bash(curl -s -D - -o /tmp/opsmind_live_login.html \"https://opsmind-ai-pi.vercel.app/login\")",
+      "Bash(curl -s -o /dev/null -w \"HTTP_CODE:%{http_code}\\\\n\" \"https://opsmind-ai-pi.vercel.app/sw.js\")",
+      "Bash(curl -s -D - -o /dev/null \"https://opsmind-ai-pi.vercel.app/_next/static/chunks/3s3qc9ducgupq.js\")",
+      "Bash(DATABASE_URL='postgresql+asyncpg://user:pw@ep-test.neon.tech/neondb?sslmode=require&channel_binding=require' ./venv/Scripts/python.exe -c ' *)",
+      "Bash(./venv/Scripts/python.exe -m pytest tests -k \"auth or login or refresh or database\" -q)",
+      "Bash(./.venv/Scripts/python.exe -m pytest tests -k \"auth or login or refresh or database\" -q)",
+      "Bash(./.venv/Scripts/python.exe -m pytest tests -q)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(./.venv/Scripts/python.exe -m pytest tests -k \"login\" -v)",
+      "Bash(./.venv/Scripts/python.exe -m alembic upgrade head --sql)",
+      "Bash(./.venv/Scripts/python.exe -c \"import fastapi; print\\(fastapi.__version__\\); print\\(fastapi.__file__\\)\")",
+      "Bash(./.venv/Scripts/python.exe -m pytest tests/test_zzz_diagnostic_cookies.py -v -s)",
+      "Bash(ENVIRONMENT=production ./.venv/Scripts/python.exe -c ' *)"
     ]
   }
 }

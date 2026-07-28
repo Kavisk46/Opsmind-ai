@@ -165,3 +165,166 @@ def test_delete_removes_the_document(document_repository, user_repository):
     asyncio.run(document_repository.delete(document))
 
     assert asyncio.run(document_repository.get_by_id(document.id)) is None
+
+
+# --- search ---
+
+
+def _seed_search_fixture(document_repository, owner_id):
+    async def _seed():
+        await document_repository.create(
+            owner_id=owner_id, filename="Quarterly Report.pdf",
+            content_type="application/pdf", size_bytes=300, storage_key="1.pdf",
+        )
+        await document_repository.create(
+            owner_id=owner_id, filename="notes.txt",
+            content_type="text/plain", size_bytes=100, storage_key="2.txt",
+        )
+        await document_repository.create(
+            owner_id=owner_id, filename="budget-report.csv",
+            content_type="text/csv", size_bytes=200, storage_key="3.csv",
+        )
+
+    asyncio.run(_seed())
+
+
+def test_search_with_no_filters_returns_everything_for_that_owner(
+    document_repository, user_repository
+):
+    owner = _make_user(user_repository, email="search-all@example.com")
+    _seed_search_fixture(document_repository, owner.id)
+
+    results = asyncio.run(
+        document_repository.search(
+            owner_id=owner.id, query=None, content_type=None, sort="newest"
+        )
+    )
+
+    assert len(results) == 3
+
+
+def test_search_query_matches_filename_case_insensitively(
+    document_repository, user_repository
+):
+    owner = _make_user(user_repository, email="search-query@example.com")
+    _seed_search_fixture(document_repository, owner.id)
+
+    results = asyncio.run(
+        document_repository.search(
+            owner_id=owner.id, query="REPORT", content_type=None, sort="newest"
+        )
+    )
+
+    assert {d.filename for d in results} == {"Quarterly Report.pdf", "budget-report.csv"}
+
+
+def test_search_filters_by_exact_content_type(document_repository, user_repository):
+    owner = _make_user(user_repository, email="search-type@example.com")
+    _seed_search_fixture(document_repository, owner.id)
+
+    results = asyncio.run(
+        document_repository.search(
+            owner_id=owner.id, query=None, content_type="text/csv", sort="newest"
+        )
+    )
+
+    assert [d.filename for d in results] == ["budget-report.csv"]
+
+
+def test_search_sorts_by_largest_first(document_repository, user_repository):
+    owner = _make_user(user_repository, email="search-sort@example.com")
+    _seed_search_fixture(document_repository, owner.id)
+
+    results = asyncio.run(
+        document_repository.search(
+            owner_id=owner.id, query=None, content_type=None, sort="largest"
+        )
+    )
+
+    assert [d.size_bytes for d in results] == [300, 200, 100]
+
+
+def test_search_sorts_by_smallest_first(document_repository, user_repository):
+    owner = _make_user(user_repository, email="search-sort-2@example.com")
+    _seed_search_fixture(document_repository, owner.id)
+
+    results = asyncio.run(
+        document_repository.search(
+            owner_id=owner.id, query=None, content_type=None, sort="smallest"
+        )
+    )
+
+    assert [d.size_bytes for d in results] == [100, 200, 300]
+
+
+def test_search_never_returns_another_owners_documents(
+    document_repository, user_repository
+):
+    owner_a = _make_user(user_repository, email="search-scope-a@example.com")
+    owner_b = _make_user(user_repository, email="search-scope-b@example.com")
+    _seed_search_fixture(document_repository, owner_a.id)
+
+    results = asyncio.run(
+        document_repository.search(
+            owner_id=owner_b.id, query=None, content_type=None, sort="newest"
+        )
+    )
+
+    assert results == []
+
+
+# --- stats aggregates ---
+
+
+def test_count_by_owner_counts_only_that_owners_documents(
+    document_repository, user_repository
+):
+    owner = _make_user(user_repository, email="stats-count@example.com")
+    _seed_search_fixture(document_repository, owner.id)
+
+    assert asyncio.run(document_repository.count_by_owner(owner.id)) == 3
+
+
+def test_count_by_owner_is_zero_for_an_owner_with_no_documents(
+    document_repository, user_repository
+):
+    owner = _make_user(user_repository, email="stats-count-zero@example.com")
+
+    assert asyncio.run(document_repository.count_by_owner(owner.id)) == 0
+
+
+def test_total_size_bytes_sums_correctly(document_repository, user_repository):
+    owner = _make_user(user_repository, email="stats-size@example.com")
+    _seed_search_fixture(document_repository, owner.id)
+
+    assert asyncio.run(document_repository.total_size_bytes_by_owner(owner.id)) == 600
+
+
+def test_total_size_bytes_is_zero_not_null_with_no_documents(
+    document_repository, user_repository
+):
+    owner = _make_user(user_repository, email="stats-size-zero@example.com")
+
+    assert asyncio.run(document_repository.total_size_bytes_by_owner(owner.id)) == 0
+
+
+def test_count_by_content_type_groups_correctly(document_repository, user_repository):
+    owner = _make_user(user_repository, email="stats-types@example.com")
+    _seed_search_fixture(document_repository, owner.id)
+
+    result = asyncio.run(document_repository.count_by_content_type(owner.id))
+
+    assert result == {"application/pdf": 1, "text/plain": 1, "text/csv": 1}
+
+
+def test_list_recent_by_owner_respects_the_limit_and_newest_first(
+    document_repository, user_repository
+):
+    owner = _make_user(user_repository, email="stats-recent@example.com")
+    _seed_search_fixture(document_repository, owner.id)
+
+    results = asyncio.run(document_repository.list_recent_by_owner(owner.id, limit=2))
+
+    assert len(results) == 2
+    # Newest first: the last-created document (budget-report.csv) leads.
+    assert results[0].filename == "budget-report.csv"

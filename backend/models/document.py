@@ -2,7 +2,7 @@ import uuid
 from enum import Enum
 from typing import TYPE_CHECKING
 
-from sqlalchemy import ForeignKey, Integer, String
+from sqlalchemy import ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from models.base import BaseModel
@@ -39,6 +39,12 @@ class Document(BaseModel):
     """
 
     __tablename__ = "documents"
+    __table_args__ = (
+        # DB-level duplicate-filename guard, scoped per owner — see
+        # alembic/versions/d6fede6f8731 for why this has to be a
+        # constraint, not just an application-level check.
+        UniqueConstraint("owner_id", "filename", name="uq_documents_owner_id_filename"),
+    )
 
     owner_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), index=True

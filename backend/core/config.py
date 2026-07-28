@@ -100,7 +100,7 @@ class Settings(BaseSettings):
     # LocalStorage). Relative to the backend process's working directory
     # by default; override to an absolute path in any real deployment.
     storage_dir: str = "storage/documents"
-    max_upload_size_bytes: int = 20 * 1024 * 1024  # 20 MB
+    max_upload_size_bytes: int = 25 * 1024 * 1024  # 25 MB
 
     # Local HuggingFace model, loaded once at process startup (see
     # main.py's lifespan) — no external API call, no API key. ~80MB,

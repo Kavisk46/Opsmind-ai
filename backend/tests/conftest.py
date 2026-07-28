@@ -18,6 +18,7 @@ from api.dependencies import (
     get_session_factory,
     get_signup_rate_limiter,
 )
+from core.config import settings
 from core.database import get_db
 from core.rate_limit import RateLimiter
 from core.storage import LocalStorage
@@ -176,7 +177,7 @@ def client():
                 yield DocumentService(
                     session,
                     storage=storage,
-                    max_size_bytes=20 * 1024 * 1024,
+                    max_size_bytes=settings.max_upload_size_bytes,
                     vector_store=vector_store,
                 )
                 await session.commit()
@@ -436,6 +437,25 @@ def user_repository(db_session):
 @pytest.fixture()
 def document_repository(db_session):
     return DocumentRepository(db_session)
+
+
+@pytest.fixture()
+def document_service(db_session, tmp_path):
+    """A real DocumentService — real SQLite session, real LocalStorage
+    writing to a pytest-managed tmp_path, real (embedded) VectorStore —
+    for testing upload validation/sanitization/duplicate-handling in
+    isolation from the HTTP layer `client`'s tests go through. No mocking
+    framework anywhere in this suite; a cheap real implementation exists
+    for everything document_service depends on, so there's nothing to
+    fake here (same reasoning as db_engine's real SQLite over a mocked
+    session).
+    """
+    return DocumentService(
+        db_session,
+        storage=LocalStorage(str(tmp_path / "uploads")),
+        max_size_bytes=settings.max_upload_size_bytes,
+        vector_store=VectorStore(str(tmp_path / "chroma")),
+    )
 
 
 @pytest.fixture()

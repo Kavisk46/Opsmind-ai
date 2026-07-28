@@ -1,13 +1,42 @@
 import uuid
+from dataclasses import dataclass
 from pathlib import PurePosixPath
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.filenames import sanitize_filename
 from core.storage import Storage
 from core.text_extraction import SUPPORTED_CONTENT_TYPES
 from core.vector_store import VectorStore
 from models.document import Document
-from repositories.document_repository import DocumentRepository
+from repositories.document_repository import DocumentRepository, SortOption
+
+# Recent-uploads list length for GET /documents/stats — a fixed, small
+# constant rather than a client-supplied parameter: this endpoint answers
+# "what's been happening lately," not "give me a paginated document
+# list" (that's what /documents and /documents/search are for).
+_STATS_RECENT_UPLOADS_LIMIT = 5
+
+# Every type SUPPORTED_CONTENT_TYPES (core/text_extraction.py) can extract
+# text from is, by definition, also safe to accept for upload — derived
+# via union rather than hand-duplicated so the two lists can never
+# silently drift apart if a future phase adds a new extractable format.
+# The extra types below have no text-extraction path at all (see
+# IngestionService.process_document, which knows to skip them and mark
+# the document READY directly rather than FAILED) but are still
+# legitimate knowledge-base assets: a screenshot, a signed contract scan,
+# a spreadsheet export. A client can still LIE about content_type (see
+# this phase's security review for why that's an accepted, honestly-
+# documented limit, not something this list fixes).
+ACCEPTED_UPLOAD_CONTENT_TYPES = SUPPORTED_CONTENT_TYPES | frozenset(
+    {
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",  # .docx
+        "text/csv",
+        "image/png",
+        "image/jpeg",
+    }
+)
 
 
 class EmptyFileError(Exception):
@@ -20,17 +49,32 @@ class FileTooLargeError(Exception):
 
 
 class UnsupportedFileTypeError(Exception):
-    """Raised when a client-declared content_type isn't one this pipeline
-    can extract text from — checked and rejected HERE, at upload time,
-    rather than only discovered later during background ingestion. Before
-    this, an arbitrary file (a .zip, an .exe, anything) with any
-    content_type was accepted, stored to disk, given a 202, and only
-    failed minutes later in a background task — wasted storage and
-    bandwidth for something rejectable in milliseconds. This is a
-    declared-content-type check, not a magic-bytes/real-file-sniffing
-    check — a client can still LIE about content_type (see this phase's
-    security review for why that's an accepted, honestly-documented
-    limit, not something this fixes)."""
+    """Raised when a client-declared content_type isn't one this app
+    accepts at all — checked and rejected HERE, at upload time, rather
+    than only discovered later during background ingestion. Before this,
+    an arbitrary file (a .zip, an .exe, anything) with any content_type
+    was accepted, stored to disk, given a 202, and only failed minutes
+    later in a background task — wasted storage and bandwidth for
+    something rejectable in milliseconds. This is a declared-content-type
+    check, not a magic-bytes/real-file-sniffing check — a client can
+    still LIE about content_type (see this phase's security review for
+    why that's an accepted, honestly-documented limit, not something this
+    fixes)."""
+
+
+class DuplicateFilenameError(Exception):
+    """Raised when the owner already has a document with this exact
+    (sanitized) filename. Authoritatively enforced by the
+    uq_documents_owner_id_filename DB constraint (see the migration that
+    added it) — the repository pre-check in upload_document exists purely
+    so the common case returns a clean error without ever writing bytes
+    to disk first; the constraint is what actually closes the race a
+    true concurrent double-upload could otherwise slip through.
+    """
+
+    def __init__(self, filename: str):
+        self.filename = filename
+        super().__init__(f"A document named {filename!r} already exists.")
 
 
 class DocumentNotFoundError(Exception):
@@ -43,6 +87,21 @@ class DocumentNotFoundError(Exception):
     """
 
 
+@dataclass
+class DocumentStats:
+    """Backs GET /documents/stats. A plain dataclass, not a query
+    result tuple — schemas.document.DocumentStatsResponse validates
+    directly off of it (Pydantic's from_attributes), so this is the one
+    place the shape of that response is actually defined; the schema
+    just mirrors it for the API contract.
+    """
+
+    total_documents: int
+    total_storage_bytes: int
+    documents_by_type: dict[str, int]
+    recent_uploads: list[Document]
+
+
 class DocumentService:
     def __init__(
         self,
@@ -51,6 +110,7 @@ class DocumentService:
         max_size_bytes: int,
         vector_store: VectorStore,
     ):
+        self.db = db
         self.repository = DocumentRepository(db)
         self.storage = storage
         self.max_size_bytes = max_size_bytes
@@ -68,26 +128,88 @@ class DocumentService:
             raise EmptyFileError(filename)
         if len(data) > self.max_size_bytes:
             raise FileTooLargeError(filename)
-        if content_type not in SUPPORTED_CONTENT_TYPES:
+        if content_type not in ACCEPTED_UPLOAD_CONTENT_TYPES:
             raise UnsupportedFileTypeError(content_type)
 
+        # Cleaned before it's ever persisted, displayed, or (once the
+        # download endpoint exists) sent back in a response header — see
+        # core/filenames.py's own docstring for exactly what this guards
+        # against and what it deliberately does NOT (path traversal is
+        # already impossible; the bytes are never written under this
+        # name).
+        safe_filename = sanitize_filename(filename)
+
+        # Fast-path rejection before any disk I/O — the common case (a
+        # user re-uploading the same file, or two files that happen to
+        # share a name) never needs to touch storage at all. This is a
+        # plain SELECT, so it does NOT close the race a true concurrent
+        # double-upload could hit; the uq_documents_owner_id_filename
+        # constraint below is what actually guarantees correctness.
+        existing = await self.repository.get_by_owner_and_filename(
+            owner_id, safe_filename
+        )
+        if existing is not None:
+            raise DuplicateFilenameError(safe_filename)
+
         # A random key, not the original filename, so two uploads named
-        # "notes.pdf" by different users never collide on disk — the
+        # "notes.pdf" by different owners never collide on disk — the
         # human-readable name is preserved separately in the DB row.
-        extension = PurePosixPath(filename).suffix
-        storage_key = f"{uuid.uuid4()}{extension}"
+        # Namespaced under the owner's own id (see core/storage.py's
+        # Storage Protocol docstring) so one user's files live together
+        # on disk, the same layout an S3 bucket would use for prefixes.
+        extension = PurePosixPath(safe_filename).suffix
+        storage_key = f"{owner_id}/{uuid.uuid4()}{extension}"
         self.storage.save(key=storage_key, data=data)
 
-        return await self.repository.create(
-            owner_id=owner_id,
-            filename=filename,
-            content_type=content_type,
-            size_bytes=len(data),
-            storage_key=storage_key,
-        )
+        try:
+            return await self.repository.create(
+                owner_id=owner_id,
+                filename=safe_filename,
+                content_type=content_type,
+                size_bytes=len(data),
+                storage_key=storage_key,
+            )
+        except IntegrityError as error:
+            # The rare case the pre-check above couldn't catch: two
+            # requests for the same new filename both passed the SELECT
+            # before either committed. The DB constraint is what actually
+            # rejects the second INSERT — this just turns that into the
+            # same clean DuplicateFilenameError as the fast path, and
+            # cleans up the file this request already wrote (an orphaned
+            # blob nothing will ever reference again otherwise). A failed
+            # flush leaves the session's transaction unusable until rolled
+            # back — required here, not optional, before anything else
+            # touches self.db.
+            await self.db.rollback()
+            self.storage.delete(key=storage_key)
+            raise DuplicateFilenameError(safe_filename) from error
 
     async def list_documents(self, *, owner_id: uuid.UUID) -> list[Document]:
         return await self.repository.list_by_owner(owner_id)
+
+    async def search_documents(
+        self,
+        *,
+        owner_id: uuid.UUID,
+        query: str | None,
+        content_type: str | None,
+        sort: SortOption,
+    ) -> list[Document]:
+        return await self.repository.search(
+            owner_id=owner_id, query=query, content_type=content_type, sort=sort
+        )
+
+    async def get_stats(self, *, owner_id: uuid.UUID) -> DocumentStats:
+        return DocumentStats(
+            total_documents=await self.repository.count_by_owner(owner_id),
+            total_storage_bytes=await self.repository.total_size_bytes_by_owner(
+                owner_id
+            ),
+            documents_by_type=await self.repository.count_by_content_type(owner_id),
+            recent_uploads=await self.repository.list_recent_by_owner(
+                owner_id, _STATS_RECENT_UPLOADS_LIMIT
+            ),
+        )
 
     async def get_document(
         self, *, owner_id: uuid.UUID, document_id: uuid.UUID
@@ -96,6 +218,18 @@ class DocumentService:
         if document is None or document.owner_id != owner_id:
             raise DocumentNotFoundError(document_id)
         return document
+
+    async def download_document(
+        self, *, owner_id: uuid.UUID, document_id: uuid.UUID
+    ) -> tuple[Document, bytes]:
+        # Reuses get_document()'s ownership check — same anti-enumeration
+        # guarantee as delete_document. storage.open() stays encapsulated
+        # here rather than the route reaching into self.storage directly,
+        # the same "routes only ever call service methods" boundary every
+        # other endpoint in this file already respects.
+        document = await self.get_document(owner_id=owner_id, document_id=document_id)
+        data = self.storage.open(key=document.storage_key)
+        return document, data
 
     async def delete_document(
         self, *, owner_id: uuid.UUID, document_id: uuid.UUID

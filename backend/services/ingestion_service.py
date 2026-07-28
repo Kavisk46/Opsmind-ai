@@ -8,7 +8,7 @@ from core.embeddings import EmbeddingModel
 from core.logging import logger
 from core.metrics import INGESTION_DURATION_SECONDS
 from core.storage import Storage
-from core.text_extraction import clean_text, extract_text
+from core.text_extraction import SUPPORTED_CONTENT_TYPES, clean_text, extract_text
 from core.vector_store import VectorStore
 from models.document import DocumentStatus
 from repositories.document_repository import DocumentRepository
@@ -66,6 +66,23 @@ class IngestionService:
             # label rather than silently skipping the metric or lumping
             # it in with "success."
             INGESTION_DURATION_SECONDS.labels(outcome="deleted_before_processing").observe(
+                time.perf_counter() - start_time
+            )
+            return
+
+        if document.content_type not in SUPPORTED_CONTENT_TYPES:
+            # A valid upload (see DocumentService.ACCEPTED_UPLOAD_CONTENT_TYPES)
+            # whose type this pipeline simply has no text-extraction path
+            # for — a PNG screenshot, a DOCX, a CSV export. That's an
+            # expected, non-error outcome: the file is fully stored and
+            # available for download/preview, it just never becomes part
+            # of the searchable knowledge base. Marking it READY (not
+            # FAILED) keeps "can't extract text from this format" and
+            # "something actually went wrong" as two honestly distinct
+            # states, instead of showing an alarming failure badge on a
+            # file that uploaded correctly.
+            await self._set_status(document_id, DocumentStatus.READY)
+            INGESTION_DURATION_SECONDS.labels(outcome="not_extractable").observe(
                 time.perf_counter() - start_time
             )
             return
