@@ -33,3 +33,19 @@ export function formatCurrency(
     ...options,
   }).format(value);
 }
+
+// Shared by every place a raw byte count needs a human label (document
+// cards, upload progress, storage stats) — one implementation instead of
+// each feature rounding/labeling bytes slightly differently.
+export function formatFileSize(bytes: number): string {
+  if (bytes < 1024) {
+    return `${bytes} B`;
+  }
+  if (bytes < 1024 * 1024) {
+    return `${Math.round(bytes / 1024)} KB`;
+  }
+  if (bytes < 1024 * 1024 * 1024) {
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  }
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+}

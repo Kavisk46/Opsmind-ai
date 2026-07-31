@@ -217,6 +217,14 @@ export function ChatWindow({
 
   const isBusy = isLoading || streamingMessageId !== null;
 
+  const handleCancel = () => {
+    // streamChatMessage's catch block already treats an aborted request
+    // as expected (apiError.code === "ABORTED", no error toast) and its
+    // `finally` resets isLoading/streamingMessageId — this is the only
+    // line needed to actually stop the in-flight fetch/stream reader.
+    abortControllerRef.current?.abort();
+  };
+
   return (
     <div className="flex h-[calc(100vh-18rem)] min-h-[400px] flex-col overflow-hidden rounded-lg border border-border bg-card lg:h-[calc(100vh-14rem)]">
       {isLoadingHistory ? (
@@ -234,7 +242,12 @@ export function ChatWindow({
           onRegenerate={handleRegenerate}
         />
       )}
-      <ChatInput onSend={handleSend} disabled={isBusy || isLoadingHistory} />
+      <ChatInput
+        onSend={handleSend}
+        disabled={isBusy || isLoadingHistory}
+        isGenerating={isBusy}
+        onCancel={handleCancel}
+      />
     </div>
   );
 }

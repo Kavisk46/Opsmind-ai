@@ -1,0 +1,15 @@
+[run]
+source =
+    api
+    core
+    models
+    repositories
+    schemas
+    services
+
+[report]
+show_missing = True
+exclude_lines =
+    pragma: no cover
+    if TYPE_CHECKING:
+    raise NotImplementedError

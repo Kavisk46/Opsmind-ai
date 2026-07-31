@@ -10,7 +10,8 @@ from models.base import BaseModel
 if TYPE_CHECKING:
     from models.conversation import Conversation
     from models.document import Document
-    from models.team import Team
+    from models.workspace import Workspace
+    from models.workspace_member import WorkspaceMember
 
 
 class UserRole(str, Enum):
@@ -59,11 +60,31 @@ class User(BaseModel):
     password_hash: Mapped[str | None] = mapped_column(String, nullable=True)
     role: Mapped[str] = mapped_column(String, default=UserRole.MEMBER.value)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    team_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("teams.id", ondelete="SET NULL"), nullable=True, index=True
+    # Replaces the earlier single team_id FK — real membership (many
+    # workspaces per user, each with its own role) now lives in
+    # WorkspaceMember; this is just a convenience pointer to "which
+    # workspace to use when a request doesn't say" (see
+    # api/dependencies.py's get_current_workspace). ondelete="SET NULL":
+    # deleting a workspace shouldn't cascade into deleting the USER who
+    # merely had it set as their default.
+    default_workspace_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="SET NULL"), nullable=True, index=True
     )
 
-    team: Mapped["Team | None"] = relationship(back_populates="users")
+    # foreign_keys is required here, not optional — Workspace.created_by
+    # is ALSO a FK from workspaces back to users.id, so there are two
+    # distinct FK paths between these two tables (users.default_workspace_id
+    # -> workspaces.id, and workspaces.created_by -> users.id).
+    # SQLAlchemy can't guess which one THIS relationship means without
+    # being told explicitly; omitting this raises AmbiguousForeignKeysError
+    # at mapper-configuration time (verified directly while wiring this
+    # phase's tests).
+    default_workspace: Mapped["Workspace | None"] = relationship(
+        foreign_keys=[default_workspace_id]
+    )
+    workspace_memberships: Mapped[list["WorkspaceMember"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
     documents: Mapped[list["Document"]] = relationship(
         back_populates="owner", cascade="all, delete-orphan"
     )

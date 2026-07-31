@@ -35,16 +35,20 @@ def _sort_clause(sort: SortOption) -> UnaryExpression[datetime] | UnaryExpressio
 
 class DocumentRepository(BaseRepository[Document]):
     """Owns every query against the `documents` table. Generic CRUD comes
-    from BaseRepository; list_by_owner/list_by_status are specific to
-    documents — ownership and processing status aren't concepts every
-    entity has.
+    from BaseRepository; everything below scopes by WORKSPACE, not owner —
+    a shared workspace's documents are visible to every member (see
+    models/workspace.py's docstring), gated by their WorkspaceRole
+    permission (see services/workspace_service.py), not by who originally
+    uploaded a given file. owner_id is still stored on Document (who
+    actually uploaded it — see models/document.py) but is no longer the
+    access-control boundary these queries enforce.
     """
 
     model = Document
 
-    async def list_by_owner(self, owner_id: uuid.UUID) -> list[Document]:
+    async def list_by_workspace(self, workspace_id: uuid.UUID) -> list[Document]:
         result = await self.db.execute(
-            select(Document).where(Document.owner_id == owner_id)
+            select(Document).where(Document.workspace_id == workspace_id)
         )
         return list(result.scalars().all())
 
@@ -54,17 +58,18 @@ class DocumentRepository(BaseRepository[Document]):
         )
         return list(result.scalars().all())
 
-    async def get_by_owner_and_filename(
-        self, owner_id: uuid.UUID, filename: str
+    async def get_by_workspace_and_filename(
+        self, workspace_id: uuid.UUID, filename: str
     ) -> Document | None:
         # Backs DocumentService's duplicate-filename pre-check — a fast,
         # common-case rejection before any disk I/O happens. The
-        # uq_documents_owner_id_filename DB constraint (see the migration)
-        # remains the authoritative guard against a true concurrent-upload
-        # race this SELECT-then-decide check can't fully close on its own.
+        # uq_documents_workspace_id_filename DB constraint (see the
+        # migration) remains the authoritative guard against a true
+        # concurrent-upload race this SELECT-then-decide check can't fully
+        # close on its own.
         result = await self.db.execute(
             select(Document).where(
-                Document.owner_id == owner_id, Document.filename == filename
+                Document.workspace_id == workspace_id, Document.filename == filename
             )
         )
         return result.scalar_one_or_none()
@@ -72,7 +77,7 @@ class DocumentRepository(BaseRepository[Document]):
     async def search(
         self,
         *,
-        owner_id: uuid.UUID,
+        workspace_id: uuid.UUID,
         query: str | None,
         content_type: str | None,
         sort: SortOption,
@@ -91,7 +96,7 @@ class DocumentRepository(BaseRepository[Document]):
         project's SQLite test suite) that have no native ILIKE, so this
         behaves identically in tests and in the real Postgres deployment.
         """
-        stmt = select(Document).where(Document.owner_id == owner_id)
+        stmt = select(Document).where(Document.workspace_id == workspace_id)
         if query:
             stmt = stmt.where(Document.filename.ilike(f"%{query}%"))
         if content_type:
@@ -101,27 +106,28 @@ class DocumentRepository(BaseRepository[Document]):
         result = await self.db.execute(stmt)
         return list(result.scalars().all())
 
-    async def count_by_owner(self, owner_id: uuid.UUID) -> int:
+    async def count_by_workspace(self, workspace_id: uuid.UUID) -> int:
         result = await self.db.execute(
-            select(func.count(Document.id)).where(Document.owner_id == owner_id)
+            select(func.count(Document.id)).where(Document.workspace_id == workspace_id)
         )
         return result.scalar_one()
 
-    async def total_size_bytes_by_owner(self, owner_id: uuid.UUID) -> int:
+    async def total_size_bytes_by_workspace(self, workspace_id: uuid.UUID) -> int:
         # coalesce to 0: SUM() over zero rows is SQL NULL, not 0 — a
-        # brand new user with no documents should see "0 bytes used", not
-        # a null that every caller would otherwise have to special-case.
+        # brand new workspace with no documents should see "0 bytes used",
+        # not a null that every caller would otherwise have to
+        # special-case.
         result = await self.db.execute(
             select(func.coalesce(func.sum(Document.size_bytes), 0)).where(
-                Document.owner_id == owner_id
+                Document.workspace_id == workspace_id
             )
         )
         return result.scalar_one()
 
-    async def count_by_content_type(self, owner_id: uuid.UUID) -> dict[str, int]:
+    async def count_by_content_type(self, workspace_id: uuid.UUID) -> dict[str, int]:
         result = await self.db.execute(
             select(Document.content_type, func.count(Document.id))
-            .where(Document.owner_id == owner_id)
+            .where(Document.workspace_id == workspace_id)
             .group_by(Document.content_type)
         )
         # dict(result.all()) fails mypy: a Row[tuple[str, int]] is
@@ -131,12 +137,12 @@ class DocumentRepository(BaseRepository[Document]):
         # __iter__ typing instead, which mypy resolves correctly.
         return {content_type: count for content_type, count in result.all()}
 
-    async def list_recent_by_owner(
-        self, owner_id: uuid.UUID, limit: int
+    async def list_recent_by_workspace(
+        self, workspace_id: uuid.UUID, limit: int
     ) -> list[Document]:
         result = await self.db.execute(
             select(Document)
-            .where(Document.owner_id == owner_id)
+            .where(Document.workspace_id == workspace_id)
             .order_by(Document.created_at.desc())
             .limit(limit)
         )

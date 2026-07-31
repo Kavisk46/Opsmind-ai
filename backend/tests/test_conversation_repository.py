@@ -2,6 +2,8 @@ import asyncio
 import uuid
 from datetime import UTC, datetime
 
+from models.workspace import Workspace
+
 
 def _make_user(user_repository, email: str = "conv-owner@example.com"):
     return asyncio.run(
@@ -9,19 +11,33 @@ def _make_user(user_repository, email: str = "conv-owner@example.com"):
     )
 
 
+def _make_workspace(db_session, created_by: uuid.UUID) -> Workspace:
+    async def _create():
+        workspace = Workspace(name="Test Workspace", created_by=created_by)
+        db_session.add(workspace)
+        await db_session.flush()
+        return workspace
+
+    return asyncio.run(_create())
+
+
 # --- create / get_by_id ---
 
 
 def test_create_persists_a_new_conversation(conversation_repository, user_repository):
     owner = _make_user(user_repository)
+    workspace = _make_workspace(conversation_repository.db, owner.id)
 
     conversation = asyncio.run(
-        conversation_repository.create(user_id=owner.id, title="My first chat")
+        conversation_repository.create(
+            user_id=owner.id, workspace_id=workspace.id, title="My first chat"
+        )
     )
 
     assert conversation.id is not None
     assert conversation.title == "My first chat"
     assert conversation.user_id == owner.id
+    assert conversation.workspace_id == workspace.id
 
 
 def test_get_by_id_returns_none_for_unknown_id(conversation_repository):
@@ -36,8 +52,18 @@ def test_list_by_owner_returns_only_that_owners_conversations(
 ):
     owner_a = _make_user(user_repository, email="conv-a@example.com")
     owner_b = _make_user(user_repository, email="conv-b@example.com")
-    asyncio.run(conversation_repository.create(user_id=owner_a.id, title="A's chat"))
-    asyncio.run(conversation_repository.create(user_id=owner_b.id, title="B's chat"))
+    workspace_a = _make_workspace(conversation_repository.db, owner_a.id)
+    workspace_b = _make_workspace(conversation_repository.db, owner_b.id)
+    asyncio.run(
+        conversation_repository.create(
+            user_id=owner_a.id, workspace_id=workspace_a.id, title="A's chat"
+        )
+    )
+    asyncio.run(
+        conversation_repository.create(
+            user_id=owner_b.id, workspace_id=workspace_b.id, title="B's chat"
+        )
+    )
 
     result = asyncio.run(conversation_repository.list_by_owner(owner_a.id))
 
@@ -49,8 +75,17 @@ def test_list_by_owner_orders_most_recently_updated_first(
     conversation_repository, user_repository
 ):
     owner = _make_user(user_repository)
-    first = asyncio.run(conversation_repository.create(user_id=owner.id, title="first"))
-    asyncio.run(conversation_repository.create(user_id=owner.id, title="second"))
+    workspace = _make_workspace(conversation_repository.db, owner.id)
+    first = asyncio.run(
+        conversation_repository.create(
+            user_id=owner.id, workspace_id=workspace.id, title="first"
+        )
+    )
+    asyncio.run(
+        conversation_repository.create(
+            user_id=owner.id, workspace_id=workspace.id, title="second"
+        )
+    )
 
     # Touch `first` last — a real UPDATE, which is what should move it to
     # the front despite being created earlier, proving list_by_owner()
@@ -69,8 +104,11 @@ def test_list_by_owner_orders_most_recently_updated_first(
 
 def test_update_changes_the_title(conversation_repository, user_repository):
     owner = _make_user(user_repository)
+    workspace = _make_workspace(conversation_repository.db, owner.id)
     conversation = asyncio.run(
-        conversation_repository.create(user_id=owner.id, title="old title")
+        conversation_repository.create(
+            user_id=owner.id, workspace_id=workspace.id, title="old title"
+        )
     )
 
     asyncio.run(conversation_repository.update(conversation, title="new title"))
@@ -81,8 +119,11 @@ def test_update_changes_the_title(conversation_repository, user_repository):
 
 def test_delete_removes_the_conversation(conversation_repository, user_repository):
     owner = _make_user(user_repository)
+    workspace = _make_workspace(conversation_repository.db, owner.id)
     conversation = asyncio.run(
-        conversation_repository.create(user_id=owner.id, title="to delete")
+        conversation_repository.create(
+            user_id=owner.id, workspace_id=workspace.id, title="to delete"
+        )
     )
 
     asyncio.run(conversation_repository.delete(conversation))

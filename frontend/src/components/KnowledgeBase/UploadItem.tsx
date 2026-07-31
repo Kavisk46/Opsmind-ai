@@ -1,6 +1,7 @@
 import { AlertCircle, Check, FileText, RotateCcw, Trash2, X } from "lucide-react";
 
 import { Progress } from "@/components/ui/progress";
+import { formatFileSize } from "@/lib/format";
 import { FOCUS_RING_CLASS, cn } from "@/lib/utils";
 
 export interface UploadEntry {
@@ -27,16 +28,6 @@ interface UploadItemProps {
   onRemove: (id: string) => void;
   onRetry: (id: string) => void;
   onDelete: (id: string) => void;
-}
-
-function formatFileSize(bytes: number): string {
-  if (bytes < 1024) {
-    return `${bytes} B`;
-  }
-  if (bytes < 1024 * 1024) {
-    return `${Math.round(bytes / 1024)} KB`;
-  }
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 export function UploadItem({

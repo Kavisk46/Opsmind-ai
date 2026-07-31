@@ -1,18 +1,20 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
-import favoritesData from "@/lib/mock-data/kb-favorites.json";
-
 interface FavoritesState {
   favoriteIds: string[];
   toggleFavorite: (documentId: string) => void;
   isFavorite: (documentId: string) => boolean;
 }
 
+// Starts empty, not seeded from mock data — this is real, per-user
+// browser-local state layered on top of real document ids (see
+// documents-api.ts); there's no such thing as a "pre-existing favorite"
+// for a brand new real account.
 export const useFavoritesStore = create<FavoritesState>()(
   persist(
     (set, get) => ({
-      favoriteIds: favoritesData as string[],
+      favoriteIds: [],
       toggleFavorite: (documentId) =>
         set((state) => ({
           favoriteIds: state.favoriteIds.includes(documentId)

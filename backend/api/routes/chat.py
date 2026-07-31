@@ -1,21 +1,45 @@
 import json
+import time
 import uuid
 from collections.abc import AsyncIterator
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 
-from api.dependencies import get_chat_service, get_current_user, get_session_factory
+from api.dependencies import (
+    get_ask_service,
+    get_chat_service,
+    get_current_user,
+    get_session_factory,
+    require_workspace_permission,
+)
 from core.config import settings
 from core.logging import logger
 from models.message import MessageRole
 from models.user import User
+from models.workspace import Workspace
 from repositories.conversation_repository import ConversationRepository
 from repositories.message_repository import MessageRepository
-from schemas.chat import ChatRequest, ChatResponse, CitationResponse
+from schemas.chat import (
+    AskCitationResponse,
+    AskRequest,
+    AskResponse,
+    ChatRequest,
+    ChatResponse,
+    CitationResponse,
+)
+from services.ask_service import AskService
+from services.ask_service import EmptyQuestionError as AskEmptyQuestionError
 from services.chat_service import ChatService, ConversationNotFoundError, EmptyQuestionError
 from services.conversation_service import ConversationService
+from services.llm.errors import (
+    ProviderNetworkError,
+    ProviderRateLimitError,
+    ProviderTimeoutError,
+    ProviderUnavailableError,
+)
 from services.tools import Citation
+from services.workspace_service import WorkspacePermission
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
@@ -24,11 +48,15 @@ router = APIRouter(prefix="/chat", tags=["chat"])
 async def ask(
     payload: ChatRequest,
     current_user: User = Depends(get_current_user),
+    current_workspace: Workspace = Depends(
+        require_workspace_permission(WorkspacePermission.CHAT)
+    ),
     service: ChatService = Depends(get_chat_service),
 ):
     try:
         conversation, result = await service.ask(
             owner_id=current_user.id,
+            workspace_id=current_workspace.id,
             question=payload.question,
             conversation_id=payload.conversation_id,
         )
@@ -40,11 +68,32 @@ async def ask(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found."
         ) from error
+    except ProviderRateLimitError as error:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="The AI provider is rate-limiting requests. Please try again shortly.",
+        ) from error
+    except ProviderTimeoutError as error:
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail="The AI provider took too long to respond.",
+        ) from error
+    except ProviderNetworkError as error:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Could not reach the AI provider.",
+        ) from error
+    except ProviderUnavailableError as error:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="The AI provider is currently unavailable.",
+        ) from error
 
     return ChatResponse(
         conversation_id=conversation.id,
         answer=result.answer,
         tool_used=result.tool_used,
+        latency_ms=result.latency_ms,
         citations=[
             CitationResponse(
                 document_id=citation.document_id,
@@ -55,6 +104,91 @@ async def ask(
             for citation in result.citations
         ],
     )
+
+
+@router.post("/ask", response_model=AskResponse)
+async def ask_question(
+    payload: AskRequest,
+    current_user: User = Depends(get_current_user),
+    current_workspace: Workspace = Depends(
+        require_workspace_permission(WorkspacePermission.CHAT)
+    ),
+    ask_service: AskService = Depends(get_ask_service),
+):
+    """A stateless sibling to POST /chat above — Planner -> Retriever ->
+    Context Builder -> Prompt Builder -> LLM -> Citations, with no
+    conversation created or persisted (see AskService's own docstring
+    for why that split is deliberate). current_workspace is still
+    required — same CHAT permission gate as every other question-
+    answering route — even though AskService itself never touches
+    workspace_id, for the same reason api/routes/documents.py enforces
+    permissions before ever reaching DocumentService: authorization is
+    the route's job, not each service's.
+    """
+    try:
+        result = await ask_service.ask(question=payload.question, owner_id=current_user.id)
+    except AskEmptyQuestionError as error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Question cannot be empty."
+        ) from error
+    except ProviderRateLimitError as error:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="The AI provider is rate-limiting requests. Please try again shortly.",
+        ) from error
+    except ProviderTimeoutError as error:
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail="The AI provider took too long to respond.",
+        ) from error
+    except ProviderNetworkError as error:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Could not reach the AI provider.",
+        ) from error
+    except ProviderUnavailableError as error:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="The AI provider is currently unavailable.",
+        ) from error
+
+    return AskResponse(
+        answer=result.answer,
+        confidence=result.confidence,
+        prompt_tokens=result.prompt_tokens,
+        completion_tokens=result.completion_tokens,
+        latency_ms=result.latency_ms,
+        citations=[
+            AskCitationResponse(
+                document_id=citation.document_id,
+                filename=citation.filename,
+                chunk_index=citation.chunk_index,
+                page_number=citation.page_number,
+            )
+            for citation in result.citations
+        ],
+    )
+
+
+def _sse_error_message(error: Exception) -> str:
+    """A best-effort, human-readable message for the SSE `{"error": ...}`
+    frame — varies by exception type without changing that frame's wire
+    shape at all (still exactly one string field; the frontend's existing
+    ChatStreamFrame parsing — see chat-api.ts — needs zero changes). By
+    the time any exception reaches here, a 200 response has already been
+    sent (see ask_stream()'s own docstring on why the non-streaming
+    route can still choose a real HTTP status but this one cannot), so a
+    distinguishing MESSAGE is the only signal left to give the client.
+    """
+    if isinstance(error, ProviderRateLimitError):
+        return "The AI provider is rate-limiting requests. Please try again shortly."
+    if isinstance(error, ProviderTimeoutError):
+        return "The AI provider took too long to respond."
+    if isinstance(error, ProviderNetworkError):
+        return "Could not reach the AI provider."
+    if isinstance(error, ProviderUnavailableError):
+        return "The AI provider is currently unavailable."
+    return "The response could not be completed."
 
 
 def _sse_event(payload: dict) -> str:
@@ -89,6 +223,7 @@ async def _stream_chat_response(
     docstring for the bug this fixed).
     """
     full_text_parts: list[str] = []
+    stream_start_time = time.perf_counter()
     # Three possible outcomes — same reasoning as OpenAIProvider.generate_stream():
     # "success" (the loop finishes naturally), "failed" (an exception
     # propagates), or "cancelled" (the client disconnected and Starlette
@@ -106,13 +241,19 @@ async def _stream_chat_response(
         # A best-effort message to the client before re-raising — a
         # partial stream that just stops with no explanation is worse
         # than one that says plainly it couldn't finish.
-        yield _sse_event({"error": "The response could not be completed."})
+        yield _sse_event({"error": _sse_error_message(error)})
         raise
     finally:
+        # End-to-end route-level duration — distinct from OpenAIProvider/
+        # AnthropicProvider's own generate_stream() duration logging
+        # (services/llm/*_provider.py), which only times the SDK call
+        # itself, not this route's full lifetime (SSE framing, the final
+        # persistence below, etc).
+        stream_duration_ms = round((time.perf_counter() - stream_start_time) * 1000, 2)
         logger.info(
             "Chat stream %s",
             status_label,
-            extra={"tool": tool_used},
+            extra={"tool": tool_used, "duration_ms": stream_duration_ms},
         )
 
         # Persist whatever text was actually generated — even a
@@ -137,6 +278,19 @@ async def _stream_chat_response(
                         conversation_id=conversation_id,
                         role=MessageRole.ASSISTANT.value,
                         content=full_text,
+                        # No token counts here — unlike ask()'s metadata,
+                        # a streamed reply's usage is never captured (see
+                        # AIOrchestrator.handle_stream()'s own docstring
+                        # on why LLM-level metrics aren't recorded for
+                        # this path). provider/model/tool_used are still
+                        # known up front, before streaming even starts.
+                        metadata={
+                            "tool_used": tool_used,
+                            "provider": settings.llm_provider,
+                            "model": settings.llm_model_name,
+                            "prompt_tokens": None,
+                            "completion_tokens": None,
+                        },
                     )
                     await session.commit()
                 except Exception:
@@ -167,6 +321,9 @@ async def _stream_chat_response(
 async def ask_stream(
     payload: ChatRequest,
     current_user: User = Depends(get_current_user),
+    current_workspace: Workspace = Depends(
+        require_workspace_permission(WorkspacePermission.CHAT)
+    ),
     service: ChatService = Depends(get_chat_service),
     session_factory=Depends(get_session_factory),
 ):
@@ -180,9 +337,19 @@ async def ask_stream(
     StreamingResponse instead takes an async generator and sends each
     yielded chunk to the client the moment it's produced.
     """
+    if not settings.streaming_enabled:
+        # Checked BEFORE any retrieval/conversation work starts — a
+        # disabled-streaming deployment shouldn't pay for a real
+        # ConversationService round trip just to then refuse the request.
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Streaming is currently disabled on this server.",
+        )
+
     try:
         conversation, tool_used, citations, token_stream = await service.ask_stream(
             owner_id=current_user.id,
+            workspace_id=current_workspace.id,
             question=payload.question,
             conversation_id=payload.conversation_id,
         )

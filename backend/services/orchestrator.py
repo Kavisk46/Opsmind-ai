@@ -46,6 +46,22 @@ class OrchestratorResult:
     answer: str
     citations: list[Citation] = field(default_factory=list)
     tool_used: str = ""
+    # Provider/model/token info — populated in handle() (never handle_stream(),
+    # per its own docstring on why LLM-level metrics aren't recorded for
+    # the streaming path) so ChatService can persist them as the
+    # assistant message's metadata (see ConversationService.append_message)
+    # without reaching into AIOrchestrator's own attributes directly.
+    provider: str = ""
+    model: str = ""
+    prompt_tokens: int | None = None
+    completion_tokens: int | None = None
+    # Total wall-clock time for the whole handle() call (tool execution +
+    # LLM generation), not just the LLM portion — already measured
+    # internally for the log line at the top of handle() and fed to
+    # AIMetricsService, but never previously returned to the caller. 0.0
+    # only for a dataclass constructed some other way than handle()
+    # itself (e.g. a test); handle() always overwrites it.
+    latency_ms: float = 0.0
 
 
 class AIOrchestrator:
@@ -90,6 +106,12 @@ class AIOrchestrator:
         history: list[tuple[str, str]] | None = None,
         conversation_id: uuid.UUID | None = None,
     ) -> OrchestratorResult:
+        # Total wall-clock time for this call, distinct from `start_time`
+        # below (which only times tool execution, for the existing log
+        # line) — measured from before routing even happens, so
+        # latency_ms on the returned result reflects everything the
+        # caller actually waited on.
+        total_start_time = time.perf_counter()
         tool_name = self._route(question)
         tool = self.tool_registry.get(tool_name)
 
@@ -112,6 +134,7 @@ class AIOrchestrator:
             return OrchestratorResult(
                 answer="I couldn't retrieve the information needed to answer that right now.",
                 tool_used=tool_name,
+                latency_ms=(time.perf_counter() - total_start_time) * 1000,
             )
 
         duration_seconds = time.perf_counter() - start_time
@@ -194,7 +217,14 @@ class AIOrchestrator:
         )
 
         return OrchestratorResult(
-            answer=llm_response.text, citations=result.citations, tool_used=tool_name
+            answer=llm_response.text,
+            citations=result.citations,
+            tool_used=tool_name,
+            provider=self.provider_name,
+            model=self.model_name,
+            prompt_tokens=llm_response.prompt_tokens,
+            completion_tokens=llm_response.completion_tokens,
+            latency_ms=(time.perf_counter() - total_start_time) * 1000,
         )
 
     async def handle_stream(

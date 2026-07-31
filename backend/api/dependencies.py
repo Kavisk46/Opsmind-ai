@@ -1,7 +1,7 @@
 import uuid
 
 import jwt
-from fastapi import Depends, HTTPException, Request, status
+from fastapi import Depends, HTTPException, Query, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,22 +15,38 @@ from core.security import decode_access_token
 from core.storage import LocalStorage
 from core.vector_store import VectorStore
 from models.user import User, UserRole
+from models.workspace import Workspace
+from models.workspace_member import WorkspaceRole
+from repositories.chunk_repository import ChunkRepository
 from repositories.conversation_repository import ConversationRepository
 from repositories.document_repository import DocumentRepository
 from repositories.message_repository import MessageRepository
 from repositories.user_repository import UserRepository
+from repositories.workspace_member_repository import WorkspaceMemberRepository
+from repositories.workspace_repository import WorkspaceRepository
 from services.ai_metrics_service import AIMetricsService
+from services.ask_service import AskService
 from services.chat_service import ChatService
+from services.citation_service import CitationService
+from services.context_service import ContextService
 from services.conversation_service import ConversationService
 from services.document_service import DocumentService
 from services.ingestion_service import IngestionService
 from services.llm.factory import get_llm_provider
 from services.llm.protocol import LLMProvider
 from services.orchestrator import AIOrchestrator
+from services.planner import Planner
 from services.prompt_builder import PromptBuilder
+from services.query_service import QueryService
+from services.reranking_service import WeightedReranker
 from services.retrieval_service import RetrievalService
 from services.tool_registry import ToolRegistry
 from services.tools import DocumentMetadataTool, RAGRetrievalTool
+from services.workspace_service import (
+    WorkspacePermission,
+    WorkspaceService,
+    has_permission,
+)
 
 # tokenUrl points Swagger UI's "Authorize" button at the login route (even
 # though that route itself takes JSON, not the form-encoded body this
@@ -122,6 +138,92 @@ def require_role(*allowed_roles: UserRole):
     return check_role
 
 
+async def get_current_workspace(
+    workspace_id: uuid.UUID | None = Query(
+        default=None,
+        description=(
+            "Which workspace to operate in. Omit to use the caller's "
+            "default workspace (every user has one, auto-created at "
+            "signup — see WorkspaceService.ensure_personal_workspace)."
+        ),
+    ),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> Workspace:
+    """Resolves "which workspace is this request about" — a query
+    parameter, not a path segment, deliberately: existing routes
+    (/documents, /chat, /conversations) keep their exact paths and stay
+    backward-compatible (the already-working frontend never sends
+    workspace_id at all, so every one of its requests implicitly
+    operates on the caller's default/personal workspace — see this
+    phase's Change Summary for why that matters).
+
+    Membership is verified here, once, for every route that depends on
+    this — a resolved Workspace this function returns is always one the
+    caller actually belongs to; 404, not 403, for the same anti-
+    enumeration reason DocumentNotFoundError/WorkspaceNotFoundError use
+    elsewhere in this codebase (a caller shouldn't be able to distinguish
+    "doesn't exist" from "exists but you're not in it").
+    """
+    resolved_workspace_id = workspace_id or current_user.default_workspace_id
+    if resolved_workspace_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="No workspace found."
+        )
+
+    membership = await WorkspaceMemberRepository(db).get_membership(
+        workspace_id=resolved_workspace_id, user_id=current_user.id
+    )
+    if membership is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Workspace not found."
+        )
+
+    workspace = await WorkspaceRepository(db).get_by_id(resolved_workspace_id)
+    if workspace is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Workspace not found."
+        )
+    return workspace
+
+
+def require_workspace_permission(permission: WorkspacePermission):
+    """A dependency FACTORY, same shape as require_role() above — one
+    per permission needed at a given route (e.g.
+    Depends(require_workspace_permission(WorkspacePermission.UPLOAD))).
+    Layered on top of get_current_workspace (itself layered on
+    get_current_user), so authentication -> membership -> permission are
+    three separate, separately-testable checks, never conflated into one.
+
+    Re-fetches the caller's membership row rather than having
+    get_current_workspace hand it over directly — a small, accepted extra
+    query, the same "small round-trip cost for a cleaner dependency
+    graph" trade-off RAGRetrievalTool's per-chunk citation lookups and
+    ConversationService.append_message's extra SELECT already make
+    elsewhere in this codebase.
+    """
+
+    async def check_permission(
+        current_user: User = Depends(get_current_user),
+        workspace: Workspace = Depends(get_current_workspace),
+        db: AsyncSession = Depends(get_db),
+    ) -> Workspace:
+        membership = await WorkspaceMemberRepository(db).get_membership(
+            workspace_id=workspace.id, user_id=current_user.id
+        )
+        # Guaranteed non-None: get_current_workspace already verified this
+        # exact membership exists moments ago in the same request.
+        assert membership is not None
+        if not has_permission(WorkspaceRole(membership.role), permission):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not have permission to perform this action in this workspace.",
+            )
+        return workspace
+
+    return check_permission
+
+
 # One process-wide LocalStorage instance — it's stateless aside from the
 # directory path, so there's no reason to build a new one per request the
 # way get_document_service() below builds a fresh DocumentService per
@@ -150,6 +252,13 @@ _vector_store = VectorStore(settings.chroma_persist_dir)
 # model load or a real API call) deferred to first .generate() call.
 _llm = get_llm_provider(settings)
 _prompt_builder = PromptBuilder(max_history_messages=settings.max_history_messages)
+# A SEPARATE PromptBuilder instance, not _prompt_builder above — chat_
+# prompt_version is fixed at construction time, and AskService (services/
+# ask_service.py) uses a different system prompt ("ask_v1") than /chat's
+# "v1" without touching what /chat already sends. Both instances are
+# stateless (see PromptBuilder's own docstring), so a second one costs
+# nothing beyond the object itself.
+_ask_prompt_builder = PromptBuilder(chat_prompt_version="ask_v1")
 
 # Process-wide, same reasoning as _storage: state (the login-attempt
 # counts) genuinely needs to persist across requests for the whole
@@ -219,6 +328,7 @@ async def get_document_service(
         storage=_storage,
         max_size_bytes=settings.max_upload_size_bytes,
         vector_store=_vector_store,
+        chunk_repository=ChunkRepository(db),
     )
 
 
@@ -234,6 +344,7 @@ async def get_ingestion_service() -> IngestionService:
         vector_store=_vector_store,
         chunk_size=settings.chunk_size_chars,
         chunk_overlap=settings.chunk_overlap_chars,
+        embedding_model_name=settings.embedding_model_name,
     )
 
 
@@ -255,6 +366,10 @@ async def get_document_repository(
     return DocumentRepository(db)
 
 
+async def get_workspace_service(db: AsyncSession = Depends(get_db)) -> WorkspaceService:
+    return WorkspaceService(db)
+
+
 async def get_conversation_service(
     db: AsyncSession = Depends(get_db),
 ) -> ConversationService:
@@ -265,9 +380,43 @@ async def get_conversation_service(
     )
 
 
+async def get_retrieval_service(
+    db: AsyncSession = Depends(get_db),
+) -> RetrievalService:
+    # Shared by both get_chat_service (below) and the standalone
+    # /retrieval/search route (api/routes/retrieval.py) — one construction,
+    # reused, rather than the two duplicating this wiring independently.
+    # WeightedReranker (services/reranking_service.py) is today's
+    # Reranker implementation; a future cross-encoder/Cohere/BGE reranker
+    # would only need to change what's constructed HERE, never any caller.
+    return RetrievalService(
+        embedding_model=_embedding_model,
+        vector_store=_vector_store,
+        chunk_repository=ChunkRepository(db),
+        document_repository=DocumentRepository(db),
+        reranker=WeightedReranker(
+            vector_weight=settings.retrieval_vector_weight,
+            keyword_weight=settings.retrieval_keyword_weight,
+        ),
+    )
+
+
+async def get_query_service() -> QueryService:
+    return QueryService()
+
+
+async def get_context_service() -> ContextService:
+    return ContextService()
+
+
+async def get_citation_service() -> CitationService:
+    return CitationService()
+
+
 async def get_chat_service(
     db: AsyncSession = Depends(get_db),
     conversation_service: ConversationService = Depends(get_conversation_service),
+    retrieval_service: RetrievalService = Depends(get_retrieval_service),
 ) -> ChatService:
     # Unlike get_ingestion_service, this takes a live per-request session,
     # not a session factory — chat runs synchronously within the
@@ -279,21 +428,33 @@ async def get_chat_service(
     # _embedding_model/_vector_store/_llm, which are process-wide
     # singletons) because they wrap a DocumentRepository bound to THIS
     # request's session — the same reason get_document_repository below
-    # builds fresh every request rather than caching one.
+    # builds fresh every request rather than caching one. retrieval_service
+    # comes from get_retrieval_service via Depends() rather than being
+    # constructed inline here — same object either way, just centralized.
+    # RAGRetrievalTool now calls retrieve_hybrid() (the same hybrid
+    # engine /retrieval/search uses), not the old vector-only retrieve()
+    # — see this phase's Change Summary for why chat was upgraded rather
+    # than left on the old path.
     document_repository = DocumentRepository(db)
-    retrieval_service = RetrievalService(
-        embedding_model=_embedding_model, vector_store=_vector_store
-    )
+    user_repository = UserRepository(db)
 
     tool_registry = ToolRegistry()
     tool_registry.register(
         RAGRetrievalTool(
             retrieval_service=retrieval_service,
-            document_repository=document_repository,
+            query_service=QueryService(),
+            context_service=ContextService(),
+            citation_service=CitationService(),
             top_k=settings.retrieval_top_k,
+            max_returned_chunks=settings.retrieval_max_returned_chunks,
+            max_context_tokens=settings.retrieval_max_context_tokens,
         )
     )
-    tool_registry.register(DocumentMetadataTool(document_repository=document_repository))
+    tool_registry.register(
+        DocumentMetadataTool(
+            document_repository=document_repository, user_repository=user_repository
+        )
+    )
 
     orchestrator = AIOrchestrator(
         tool_registry=tool_registry,
@@ -304,3 +465,23 @@ async def get_chat_service(
         model_name=settings.llm_model_name,
     )
     return ChatService(conversation_service, orchestrator=orchestrator)
+
+
+async def get_ask_service(
+    retrieval_service: RetrievalService = Depends(get_retrieval_service),
+) -> AskService:
+    # Planner/ContextService/CitationService are all stateless (no I/O,
+    # no per-request session) — built fresh per request the same way
+    # get_chat_service already builds its own ContextService/
+    # CitationService instances, rather than adding more process-wide
+    # singletons for objects this cheap to construct.
+    return AskService(
+        Planner(),
+        retrieval_service,
+        ContextService(),
+        _ask_prompt_builder,
+        CitationService(),
+        _llm,
+        max_context_tokens=settings.retrieval_max_context_tokens,
+        max_returned_chunks=settings.retrieval_max_returned_chunks,
+    )

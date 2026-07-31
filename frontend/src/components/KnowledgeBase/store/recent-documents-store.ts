@@ -1,8 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
-import recentDocumentsData from "@/lib/mock-data/kb-recent-documents.json";
-
 const MAX_RECENT = 8;
 
 interface RecentDocumentsState {
@@ -10,10 +8,13 @@ interface RecentDocumentsState {
   recordView: (documentId: string) => void;
 }
 
+// Starts empty, not seeded from mock data — same reasoning as
+// favorites-store.ts: real, per-user browser-local state over real
+// document ids, with nothing to pre-populate for a new account.
 export const useRecentDocumentsStore = create<RecentDocumentsState>()(
   persist(
     (set) => ({
-      recentIds: recentDocumentsData as string[],
+      recentIds: [],
       recordView: (documentId) =>
         set((state) => ({
           recentIds: [

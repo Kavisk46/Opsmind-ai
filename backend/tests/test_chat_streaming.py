@@ -2,6 +2,7 @@ import asyncio
 import json
 import uuid
 
+from core.config import settings
 from repositories.message_repository import MessageRepository
 
 
@@ -87,6 +88,35 @@ def test_chat_stream_persists_assistant_message_after_completion(client):
     assert roles == ["user", "assistant"]
     assert messages[0].content == "hello there"
     assert messages[1].content == "This is a fake streamed answer."
+
+
+def test_chat_stream_persists_provider_and_model_as_message_metadata(client):
+    # Unlike the non-streaming path (see test_chat.py's equivalent test,
+    # which reads "fake"/"fake-model" off the fixture's AIOrchestrator),
+    # the streaming route reads provider/model from the real global
+    # `settings` object directly (see api/routes/chat.py's own comment on
+    # why) — asserted against that SAME object here, not hardcoded, so
+    # this test doesn't silently drift if core/config.py's defaults ever
+    # change.
+    headers = _auth_headers(client, email="stream-metadata-persist@example.com")
+    response = client.post(
+        "/chat/stream", headers=headers, json={"question": "hello there"}
+    )
+    conversation_id = uuid.UUID(response.headers["X-Conversation-ID"])
+
+    async def _fetch_messages():
+        async with client.session_factory() as session:
+            return await MessageRepository(session).list_by_conversation(conversation_id)
+
+    messages = asyncio.run(_fetch_messages())
+    user_message, assistant_message = messages
+
+    assert user_message.extra_metadata is None
+    assert assistant_message.extra_metadata["tool_used"] == "rag_retrieval"
+    assert assistant_message.extra_metadata["provider"] == settings.llm_provider
+    assert assistant_message.extra_metadata["model"] == settings.llm_model_name
+    assert assistant_message.extra_metadata["prompt_tokens"] is None
+    assert assistant_message.extra_metadata["completion_tokens"] is None
 
 
 def test_chat_stream_routes_metadata_question_correctly(client):

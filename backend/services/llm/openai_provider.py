@@ -3,7 +3,13 @@ from collections.abc import AsyncIterator
 from typing import TYPE_CHECKING
 
 from core.logging import logger
-from services.llm.protocol import LLMResponse
+from services.llm.errors import (
+    ProviderNetworkError,
+    ProviderRateLimitError,
+    ProviderTimeoutError,
+    ProviderUnavailableError,
+)
+from services.llm.protocol import LLMResponse, ProviderHealth
 
 if TYPE_CHECKING:
     # Only for type-checking — the real import stays lazy, inside
@@ -14,12 +20,45 @@ if TYPE_CHECKING:
     from openai import AsyncOpenAI
 
 
-class MissingAPIKeyError(Exception):
+class MissingAPIKeyError(ProviderUnavailableError):
     """Raised when generate() is called with no API key configured — a
     clear, actionable error instead of letting the OpenAI SDK's own
     (less obvious, deeply-nested) authentication error surface directly
     to whatever called this.
+
+    Subclasses ProviderUnavailableError (not bare Exception) specifically
+    so api/routes/chat.py's existing `except ProviderUnavailableError`
+    handler catches this too, mapping it to 503 — a misconfigured
+    provider IS a form of "provider unavailable" from the caller's point
+    of view. This is what lets chat.py stay ignorant of both provider
+    modules' exception types entirely, matching the containment rule
+    this module's own docstring states for imports.
     """
+
+
+def _map_sdk_error(error: Exception) -> Exception:
+    """Translates an openai SDK exception into one of this project's own
+    typed provider errors (services/llm/errors.py), so nothing outside
+    this file ever needs to import/catch the openai SDK's own exception
+    types — the same containment principle this module's docstring
+    already states for imports. Order matters: openai.APITimeoutError
+    is itself a SUBCLASS of openai.APIConnectionError (verified directly
+    against the installed SDK), so the timeout check must come first, or
+    every timeout would be misclassified as a generic network error.
+    Anything not recognized here is returned UNCHANGED — callers still
+    see the original exception (existing behavior, unaffected).
+    """
+    import openai
+
+    if isinstance(error, openai.RateLimitError):
+        return ProviderRateLimitError(str(error))
+    if isinstance(error, openai.APITimeoutError):
+        return ProviderTimeoutError(str(error))
+    if isinstance(error, openai.APIConnectionError):
+        return ProviderNetworkError(str(error))
+    if isinstance(error, openai.APIStatusError):
+        return ProviderUnavailableError(str(error))
+    return error
 
 
 class OpenAIProvider:
@@ -51,12 +90,14 @@ class OpenAIProvider:
         api_key: str | None,
         model: str,
         temperature: float,
+        top_p: float,
         max_output_tokens: int,
         timeout_seconds: float,
     ):
         self._api_key = api_key
         self._model = model
         self._temperature = temperature
+        self._top_p = top_p
         self._max_output_tokens = max_output_tokens
         self._timeout_seconds = timeout_seconds
         self._client: AsyncOpenAI | None = None
@@ -68,6 +109,18 @@ class OpenAIProvider:
         # constructed. Whether a call actually SUCCEEDS depends on a
         # valid API key, a separate concern from "is this object ready."
         return True
+
+    @property
+    def model_name(self) -> str:
+        return self._model
+
+    def health(self) -> ProviderHealth:
+        # A local, cheap check — never a live call to OpenAI (see
+        # ProviderHealth's own docstring). Whether the key is actually
+        # VALID is only ever discovered by a real generate() call.
+        if not self._api_key:
+            return ProviderHealth(is_healthy=False, detail="No API key configured.")
+        return ProviderHealth(is_healthy=True)
 
     async def generate(self, prompt: str) -> LLMResponse:
         if not self._api_key:
@@ -89,9 +142,10 @@ class OpenAIProvider:
                 model=self._model,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=self._temperature,
+                top_p=self._top_p,
                 max_tokens=self._max_output_tokens,
             )
-        except Exception:
+        except Exception as error:
             duration_seconds = time.perf_counter() - start_time
             logger.error(
                 "LLM request failed",
@@ -102,7 +156,7 @@ class OpenAIProvider:
                     "llm_success": False,
                 },
             )
-            raise
+            raise _map_sdk_error(error) from error
 
         duration_seconds = time.perf_counter() - start_time
         usage = response.usage
@@ -161,6 +215,7 @@ class OpenAIProvider:
                 model=self._model,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=self._temperature,
+                top_p=self._top_p,
                 max_tokens=self._max_output_tokens,
                 stream=True,
             )
@@ -169,9 +224,9 @@ class OpenAIProvider:
                 if delta:
                     yield delta
             status_label = "success"
-        except Exception:
+        except Exception as error:
             status_label = "failed"
-            raise
+            raise _map_sdk_error(error) from error
         finally:
             duration_seconds = time.perf_counter() - start_time
             log_fn = logger.error if status_label == "failed" else logger.info

@@ -1,6 +1,7 @@
 import uuid
 from collections.abc import AsyncIterator
 
+from core.logging import logger
 from models.conversation import Conversation
 from models.message import MessageRole
 
@@ -41,14 +42,30 @@ class ChatService:
         self,
         *,
         owner_id: uuid.UUID,
+        workspace_id: uuid.UUID,
         question: str,
         conversation_id: uuid.UUID | None,
     ) -> tuple[Conversation, OrchestratorResult]:
         if not question.strip():
             raise EmptyQuestionError()
 
+        # workspace_id here only stamps WHICH workspace this conversation
+        # belongs to (see Conversation's own docstring) — retrieval/tool
+        # execution below still scopes by owner_id, a deliberate, staged
+        # deferral (see this phase's Change Summary).
         conversation = await self.conversation_service.get_or_create_conversation(
-            owner_id=owner_id, conversation_id=conversation_id, title_hint=question
+            owner_id=owner_id,
+            workspace_id=workspace_id,
+            conversation_id=conversation_id,
+            title_hint=question,
+        )
+        # question TEXT is never logged (this codebase never logs user
+        # content — see AIMetricsService's own reasoning), only its
+        # length — enough to spot "someone's pasting a whole document as
+        # a question" patterns without recording what anyone actually asked.
+        logger.info(
+            "Chat request",
+            extra={"conversation_id": str(conversation.id), "question_length": len(question)},
         )
 
         # Fetched BEFORE persisting this turn's user message, so history
@@ -74,6 +91,13 @@ class ChatService:
             conversation_id=conversation.id,
             role=MessageRole.ASSISTANT.value,
             content=result.answer,
+            metadata={
+                "tool_used": result.tool_used,
+                "provider": result.provider,
+                "model": result.model,
+                "prompt_tokens": result.prompt_tokens,
+                "completion_tokens": result.completion_tokens,
+            },
         )
 
         return conversation, result
@@ -82,6 +106,7 @@ class ChatService:
         self,
         *,
         owner_id: uuid.UUID,
+        workspace_id: uuid.UUID,
         question: str,
         conversation_id: uuid.UUID | None,
     ) -> tuple[Conversation, str, list[Citation], AsyncIterator[str]]:
@@ -106,7 +131,14 @@ class ChatService:
             raise EmptyQuestionError()
 
         conversation = await self.conversation_service.get_or_create_conversation(
-            owner_id=owner_id, conversation_id=conversation_id, title_hint=question
+            owner_id=owner_id,
+            workspace_id=workspace_id,
+            conversation_id=conversation_id,
+            title_hint=question,
+        )
+        logger.info(
+            "Chat stream request",
+            extra={"conversation_id": str(conversation.id), "question_length": len(question)},
         )
 
         history = await self.conversation_service.prepare_history_for_prompt(

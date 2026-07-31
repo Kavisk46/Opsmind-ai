@@ -9,6 +9,7 @@ from models.base import BaseModel
 
 if TYPE_CHECKING:
     from models.user import User
+    from models.workspace import Workspace
 
 
 class DocumentStatus(str, Enum):
@@ -40,14 +41,33 @@ class Document(BaseModel):
 
     __tablename__ = "documents"
     __table_args__ = (
-        # DB-level duplicate-filename guard, scoped per owner — see
-        # alembic/versions/d6fede6f8731 for why this has to be a
-        # constraint, not just an application-level check.
-        UniqueConstraint("owner_id", "filename", name="uq_documents_owner_id_filename"),
+        # DB-level duplicate-filename guard, scoped per WORKSPACE now, not
+        # per owner (see alembic/versions/d6fede6f8731 for why this has to
+        # be a constraint, not just an application-level check) — since a
+        # workspace's documents are visible to every member (see
+        # models/workspace.py's docstring), "no duplicate filenames" now
+        # means "not within the same shared workspace," matching how the
+        # rest of this phase's visibility model works. Two DIFFERENT
+        # workspaces may still each have their own "report.pdf".
+        UniqueConstraint("workspace_id", "filename", name="uq_documents_workspace_id_filename"),
     )
 
+    # Who actually uploaded it — kept for authorship/audit display, but no
+    # longer the ACCESS-CONTROL boundary; workspace_id below is. ondelete=
+    # CASCADE still applies (deleting the uploader's account still deletes
+    # their documents) — a real product might instead reassign orphaned
+    # documents to the workspace, but that's a future decision, not a
+    # silent behavior change to make here.
     owner_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    # The actual visibility/access-control boundary (see models/workspace.py) —
+    # every workspace member can see this document, gated by their
+    # WorkspaceRole's permissions, regardless of who owner_id above points
+    # at. ondelete=CASCADE: deleting a workspace deletes the documents
+    # that only ever existed inside it.
+    workspace_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"), index=True
     )
     # Nullable for now: the existing upload flow (services/document_service.py)
     # derives everything from the uploaded file itself and doesn't collect a
@@ -68,3 +88,4 @@ class Document(BaseModel):
     error_message: Mapped[str | None] = mapped_column(String, nullable=True)
 
     owner: Mapped["User"] = relationship(back_populates="documents")
+    workspace: Mapped["Workspace"] = relationship()

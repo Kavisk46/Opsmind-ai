@@ -1,6 +1,5 @@
 "use client";
 
-import { useQueryClient } from "@tanstack/react-query";
 import { X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
@@ -11,12 +10,7 @@ import { toast } from "@/lib/toast";
 import { FOCUS_RING_CLASS, cn } from "@/lib/utils";
 import { useModalStore } from "@/store/modal-store";
 
-import {
-  DOCUMENTS_QUERY_KEY,
-  deleteDocument,
-  uploadDocument,
-  useDocuments,
-} from "./documents-api";
+import { useDeleteDocument, useDocuments, useUploadDocument } from "./documents-api";
 import { SearchBar } from "./SearchBar";
 import {
   UPLOAD_ACCEPT_ATTRIBUTE,
@@ -55,12 +49,13 @@ function UploadModalContent() {
   const abortControllersRef = useRef<Map<string, AbortController>>(new Map());
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const queryClient = useQueryClient();
-  // Cached and SHARED with StatsCards.tsx's "Documents Indexed" count (see
-  // documents-api.ts) — this modal invalidates the same key after a
-  // successful upload/delete below, so the dashboard reflects it too
-  // without needing to know this component exists.
+  // Cached and SHARED with the Dashboard's StatsGrid "Documents" card (see
+  // documents-api.ts) — useUploadDocument/useDeleteDocument below both
+  // invalidate this same key on success, so the dashboard reflects it too
+  // without needing to know this modal exists.
   const documentsQuery = useDocuments();
+  const uploadMutation = useUploadDocument();
+  const deleteMutation = useDeleteDocument();
 
   useModalDismiss({ onClose: closeModal, closeButtonRef, containerRef });
 
@@ -117,57 +112,61 @@ function UploadModalContent() {
     const controller = new AbortController();
     abortControllersRef.current.set(entryId, controller);
 
-    uploadDocument(file, {
-      signal: controller.signal,
-      onProgress: (percent) => {
-        setEntries((prev) =>
-          prev.map((existing) =>
-            existing.id === entryId ? { ...existing, progress: percent } : existing
-          )
-        );
+    uploadMutation.mutate(
+      {
+        file,
+        signal: controller.signal,
+        onProgress: (percent) => {
+          setEntries((prev) =>
+            prev.map((existing) =>
+              existing.id === entryId ? { ...existing, progress: percent } : existing
+            )
+          );
+        },
       },
-    })
-      .then((document) => {
-        setEntries((prev) =>
-          prev.map((existing) =>
-            existing.id === entryId
-              ? {
-                  ...existing,
-                  status: "success",
-                  progress: 100,
-                  documentId: document.id,
-                }
-              : existing
-          )
-        );
-        // Keeps StatsCards.tsx's "Documents Indexed" count (shares this
-        // exact query key) correct next time it's viewed, without this
-        // modal needing to know that component exists.
-        void queryClient.invalidateQueries({ queryKey: DOCUMENTS_QUERY_KEY });
-      })
-      .catch((error) => {
-        const apiError = normalizeError(error);
-        if (apiError.code === "ABORTED") {
-          // The entry was removed (or the modal closed) — nothing left to
-          // update; setting an error on a discarded entry would just
-          // resurrect it as a phantom row.
-          return;
-        }
-        setEntries((prev) =>
-          prev.map((existing) =>
-            existing.id === entryId
-              ? {
-                  ...existing,
-                  status: "error",
-                  errorMessage: getFriendlyErrorMessage(apiError),
-                }
-              : existing
-          )
-        );
-      })
-      .finally(() => {
-        abortControllersRef.current.delete(entryId);
-      });
+      {
+        // useUploadDocument's own onSuccess already invalidates the
+        // documents/stats query keys (shared with the Dashboard) — this
+        // callback only updates THIS entry's local row state.
+        onSuccess: (document) => {
+          setEntries((prev) =>
+            prev.map((existing) =>
+              existing.id === entryId
+                ? {
+                    ...existing,
+                    status: "success",
+                    progress: 100,
+                    documentId: document.id,
+                  }
+                : existing
+            )
+          );
+        },
+        onError: (error) => {
+          const apiError = normalizeError(error);
+          if (apiError.code === "ABORTED") {
+            // The entry was removed (or the modal closed) — nothing left to
+            // update; setting an error on a discarded entry would just
+            // resurrect it as a phantom row.
+            return;
+          }
+          setEntries((prev) =>
+            prev.map((existing) =>
+              existing.id === entryId
+                ? {
+                    ...existing,
+                    status: "error",
+                    errorMessage: getFriendlyErrorMessage(apiError),
+                  }
+                : existing
+            )
+          );
+        },
+        onSettled: () => {
+          abortControllersRef.current.delete(entryId);
+        },
+      }
+    );
   };
 
   const handleFilesSelected = (files: File[]) => {
@@ -223,27 +222,27 @@ function UploadModalContent() {
     }
     const documentId = entry.documentId;
 
-    // Optimistic removal — DELETE /documents/{id} is a 204 with nothing
-    // useful to await visibly, and this is the user's own explicit delete
-    // action, not a background process that could surprise them.
+    // Optimistic removal from THIS modal's own local row list — separate
+    // from, and in addition to, useDeleteDocument's own optimistic update
+    // of the shared documents/search query cache (see documents-api.ts).
     setEntries((prev) => prev.filter((existing) => existing.id !== id));
 
-    deleteDocument(documentId)
-      .then(() => {
-        void queryClient.invalidateQueries({ queryKey: DOCUMENTS_QUERY_KEY });
-      })
-      .catch((error) => {
+    deleteMutation.mutate(documentId, {
+      onError: (error) => {
         toast(getFriendlyErrorMessage(normalizeError(error)));
         // Failed server-side — restore the entry rather than leaving the
         // UI claiming it's gone when it isn't.
         setEntries((prev) => [entry, ...prev]);
-      });
+      },
+    });
   };
 
-  // Client-side filter over the real, already-fetched document list — no
-  // backend search endpoint exists (verified: no such route anywhere in
-  // api/routes/), so this is real data narrowed locally rather than a
-  // fabricated "search" that queries nothing.
+  // Client-side filter over the real, already-fetched entries in THIS
+  // modal's own upload/manage list — a real GET /documents/search endpoint
+  // exists now (see the main page's search box, which uses it), but this
+  // modal's search is over a small, already-in-memory set scoped to this
+  // upload session, so filtering it locally avoids a redundant network
+  // round trip for data already sitting in `entries`.
   const filteredEntries = entries.filter((entry) =>
     entry.filename.toLowerCase().includes(searchQuery.trim().toLowerCase())
   );

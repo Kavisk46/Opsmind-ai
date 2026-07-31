@@ -4,7 +4,7 @@ from collections.abc import AsyncIterator
 from typing import TYPE_CHECKING
 
 from core.logging import logger
-from services.llm.protocol import LLMResponse
+from services.llm.protocol import LLMResponse, ProviderHealth
 
 if TYPE_CHECKING:
     # Type-checking only — the real import stays lazy inside
@@ -39,6 +39,17 @@ class LocalTransformersProvider:
     @property
     def is_loaded(self) -> bool:
         return self._pipeline is not None
+
+    @property
+    def model_name(self) -> str:
+        return self._model_name
+
+    def health(self) -> ProviderHealth:
+        # Always healthy, structurally — no API key, no external service
+        # to be misconfigured against. Whether the model actually
+        # downloads/loads successfully is only discovered by a real
+        # generate() call (is_loaded reflects that, separately).
+        return ProviderHealth(is_healthy=True)
 
     async def generate(self, prompt: str) -> LLMResponse:
         start_time = time.perf_counter()

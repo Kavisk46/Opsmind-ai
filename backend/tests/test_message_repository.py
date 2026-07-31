@@ -1,12 +1,23 @@
 import asyncio
 import uuid
 
+from models.workspace import Workspace
+
 
 def _make_conversation(user_repository, conversation_repository, email: str = "msg-owner@example.com"):
     owner = asyncio.run(
         user_repository.create(email=email, name="Msg Owner", password_hash="h")
     )
-    return asyncio.run(conversation_repository.create(user_id=owner.id, title="chat"))
+
+    async def _create():
+        workspace = Workspace(name="Test Workspace", created_by=owner.id)
+        conversation_repository.db.add(workspace)
+        await conversation_repository.db.flush()
+        return await conversation_repository.create(
+            user_id=owner.id, workspace_id=workspace.id, title="chat"
+        )
+
+    return asyncio.run(_create())
 
 
 # --- create ---

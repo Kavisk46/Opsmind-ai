@@ -2,7 +2,7 @@ import uuid
 from enum import Enum
 from typing import TYPE_CHECKING
 
-from sqlalchemy import ForeignKey, String
+from sqlalchemy import JSON, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from models.base import BaseModel
@@ -38,5 +38,17 @@ class Message(BaseModel):
     )
     role: Mapped[str] = mapped_column(String)
     content: Mapped[str] = mapped_column(String)
+    # Named extra_metadata, not metadata — SQLAlchemy's DeclarativeBase
+    # already reserves the attribute name `metadata` for the MetaData
+    # instance every model class carries; mapping a column under that
+    # exact Python name raises InvalidRequestError at class-definition
+    # time. mapped_column("metadata", ...) still makes the real database
+    # COLUMN named "metadata" — only the Python-side attribute differs.
+    # Populated with provider/model/tool_used/token counts for an
+    # assistant message (see ChatService.ask()/api/routes/chat.py); None
+    # for a user message, which has no such thing to record.
+    extra_metadata: Mapped[dict | None] = mapped_column(
+        "metadata", JSON, nullable=True
+    )
 
     conversation: Mapped["Conversation"] = relationship(back_populates="messages")

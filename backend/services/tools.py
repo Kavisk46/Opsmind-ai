@@ -3,7 +3,10 @@ from dataclasses import dataclass, field
 from typing import Protocol
 
 from repositories.document_repository import DocumentRepository
-from services.prompt_builder import ContextChunk, PromptBuilder
+from repositories.user_repository import UserRepository
+from services.citation_service import CitationService
+from services.context_service import ContextService
+from services.query_service import QueryService
 from services.retrieval_service import RetrievalService
 
 
@@ -69,12 +72,20 @@ class Tool(Protocol):
 
 
 class RAGRetrievalTool:
-    """Wraps RetrievalService (embed query, search ChromaDB) and formats
-    the result as prompt-ready text plus resolved citations. RetrievalService
-    itself stays exactly as it was — this is an adapter on top of it, not
-    a replacement; a future non-chat feature (e.g. a standalone "search my
-    documents" endpoint) can still use RetrievalService directly without
-    going through this Tool wrapper at all.
+    """Wraps the hybrid retrieval engine (QueryService -> RetrievalService.
+    retrieve_hybrid -> ContextService -> CitationService) and adapts its
+    output into this module's ToolResult/Citation shapes. Before this
+    phase, chat used RetrievalService.retrieve() directly — plain vector
+    search, no keyword leg, no reranking, no token-budgeted context
+    assembly. Wiring chat through the SAME hybrid engine the standalone
+    /retrieval/search endpoint already used is this phase's whole point:
+    one retrieval pipeline, two callers (chat and that endpoint), not two
+    independently-maintained ones.
+
+    Needs no DocumentRepository of its own anymore — retrieve_hybrid()
+    already resolves every returned chunk's filename before returning it
+    (see RetrievalService's own docstring), so the N+1 citation-name
+    lookup that used to live in THIS class is gone, not just moved.
     """
 
     name = "rag_retrieval"
@@ -82,63 +93,62 @@ class RAGRetrievalTool:
     def __init__(
         self,
         retrieval_service: RetrievalService,
-        document_repository: DocumentRepository,
+        query_service: QueryService,
+        context_service: ContextService,
+        citation_service: CitationService,
+        *,
         top_k: int,
+        max_returned_chunks: int,
+        max_context_tokens: int,
     ):
         self.retrieval_service = retrieval_service
-        self.document_repository = document_repository
+        self.query_service = query_service
+        self.context_service = context_service
+        self.citation_service = citation_service
         self.top_k = top_k
+        self.max_returned_chunks = max_returned_chunks
+        self.max_context_tokens = max_context_tokens
 
     async def run(self, *, query: str, owner_id: uuid.UUID) -> ToolResult:
-        chunks = self.retrieval_service.retrieve(
-            query=query, owner_id=owner_id, top_k=self.top_k
+        # query is already guaranteed non-empty here — ChatService.ask()/
+        # ask_stream() reject an empty question before AIOrchestrator (and
+        # therefore this tool) is ever reached — but QueryService.process()
+        # still does real work beyond that guarantee: normalizing
+        # whitespace before it reaches embedding/keyword search.
+        processed_query = self.query_service.process(query)
+
+        chunks, _timing = await self.retrieval_service.retrieve_hybrid(
+            query=processed_query.text,
+            owner_id=owner_id,
+            top_k=self.top_k,
+            max_returned_chunks=self.max_returned_chunks,
         )
 
-        # One DocumentRepository.get_by_id() call per chunk — a real N+1
-        # query pattern, deliberately not optimized away with a batched
-        # IN-query. At a small top_k this is at most a handful of extra
-        # lookups per question; worth revisiting only if top_k grows large
-        # enough for that cost to actually show up in a profiler. The
-        # SAME lookup feeds both the citation (for the API response) and
-        # the ContextChunk (for the prompt) — one document fetch, two uses.
-        context_chunks: list[ContextChunk] = []
-        citations: list[Citation] = []
-        for chunk in chunks:
-            document = await self.document_repository.get_by_id(chunk.document_id)
-            document_name = document.filename if document else "(deleted document)"
-
-            context_chunks.append(
-                ContextChunk(
-                    text=chunk.text,
-                    source_name=document_name,
-                    page_number=chunk.page_number,
-                )
+        assembled_context = self.context_service.assemble(
+            chunks, max_context_tokens=self.max_context_tokens
+        )
+        # CitationService's Citation has `filename`, not `document_name`
+        # — adapted into THIS module's own Citation shape (which
+        # schemas/chat.py's CitationResponse is built from) rather than
+        # changing that public API's field name for this phase.
+        citations = [
+            Citation(
+                document_id=citation.document_id,
+                document_name=citation.filename,
+                chunk_index=citation.chunk_index,
+                page_number=citation.page_number,
             )
-            citations.append(
-                Citation(
-                    document_id=chunk.document_id,
-                    document_name=document_name,
-                    chunk_index=chunk.chunk_index,
-                    page_number=chunk.page_number,
-                )
-            )
-
-        # format_context() lives on PromptBuilder (services/prompt_builder.py)
-        # — this tool doesn't build its own "[Source N]"-style text, it
-        # calls the one shared formatter every context-producing tool
-        # uses, now enriched with document name + page number so a
-        # citation instruction in the prompt has something concrete to
-        # reference.
-        output_text = PromptBuilder.format_context(context_chunks)
+            for citation in self.citation_service.build_citations(chunks)
+        ]
 
         return ToolResult(
             tool_name=self.name,
             success=True,
-            output_text=output_text,
+            output_text=assembled_context.text,
             citations=citations,
             retrieval_metadata=RetrievalMetadata(
                 chunk_count=len(chunks),
-                confidence_scores=[chunk.similarity_score for chunk in chunks],
+                confidence_scores=[chunk.combined_score for chunk in chunks],
             ),
         )
 
@@ -155,11 +165,28 @@ class DocumentMetadataTool:
 
     name = "document_metadata"
 
-    def __init__(self, document_repository: DocumentRepository):
+    def __init__(self, document_repository: DocumentRepository, user_repository: UserRepository):
         self.document_repository = document_repository
+        self.user_repository = user_repository
 
     async def run(self, *, query: str, owner_id: uuid.UUID) -> ToolResult:
-        documents = await self.document_repository.list_by_owner(owner_id)
+        # Stage 1 of the multi-workspace rollout (see
+        # services/workspace_service.py) deliberately keeps chat/
+        # AIOrchestrator owner_id-scoped, deferring a full workspace-aware
+        # Tool protocol to Stage 2 — but DocumentRepository's read methods
+        # were already re-scoped from owner_id to workspace_id (shared
+        # workspace visibility), so there is no owner-scoped document
+        # query left to call directly. Resolving the caller's own default
+        # workspace here is the minimal bridge between the two: it keeps
+        # this tool's answer scoped to what the current user can already
+        # see everywhere else (their default workspace's documents),
+        # without threading workspace_id through the whole tool pipeline.
+        user = await self.user_repository.get_by_id(owner_id)
+        documents = (
+            await self.document_repository.list_by_workspace(user.default_workspace_id)
+            if user is not None and user.default_workspace_id is not None
+            else []
+        )
 
         if not documents:
             output_text = "The user has not uploaded any documents yet."

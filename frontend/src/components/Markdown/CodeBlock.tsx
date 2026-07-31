@@ -1,6 +1,5 @@
 "use client";
 
-import { Check, Copy } from "lucide-react";
 import { useTheme } from "next-themes";
 import { PrismLight as SyntaxHighlighter } from "react-syntax-highlighter";
 import bash from "react-syntax-highlighter/dist/esm/languages/prism/bash";
@@ -19,8 +18,7 @@ import {
   oneLight,
 } from "react-syntax-highlighter/dist/esm/styles/prism";
 
-import { useCopyToClipboard } from "@/hooks/use-copy-to-clipboard";
-import { FOCUS_RING_CLASS, cn } from "@/lib/utils";
+import { ClipboardButton } from "@/components/Clipboard";
 
 // A curated set rather than the full ~200-language `Prism` bundle, which
 // pulls in every refractor grammar and produces a ~800KB chunk. Anything
@@ -46,27 +44,18 @@ interface CodeBlockProps {
 
 export function CodeBlock({ language, code }: CodeBlockProps) {
   const { resolvedTheme } = useTheme();
-  const { copied, copy } = useCopyToClipboard();
 
   return (
     <div className="my-2 overflow-hidden rounded-md border border-border text-left">
       <div className="flex items-center justify-between bg-muted px-3 py-1.5 text-xs text-muted-foreground">
         <span className="font-mono">{language || "text"}</span>
-        <button
-          type="button"
-          onClick={() => copy(code)}
-          className={cn(
-            "inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs transition-colors hover:bg-accent hover:text-accent-foreground",
-            FOCUS_RING_CLASS
-          )}
-        >
-          {copied ? (
-            <Check className="h-3.5 w-3.5" aria-hidden="true" />
-          ) : (
-            <Copy className="h-3.5 w-3.5" aria-hidden="true" />
-          )}
-          {copied ? "Copied" : "Copy"}
-        </button>
+        <ClipboardButton
+          text={code}
+          ariaLabel="Copy code"
+          label="Copy"
+          variant="inline"
+          successMessage="Code copied to clipboard"
+        />
       </div>
       <SyntaxHighlighter
         language={language || "text"}

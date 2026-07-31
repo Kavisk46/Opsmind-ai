@@ -18,6 +18,23 @@ _COLLECTION_METADATA = {"hnsw:space": "cosine"}
 _NO_PAGE_NUMBER = -1
 
 
+class VectorStoreUnavailableError(Exception):
+    """Raised when the underlying ChromaDB collection itself can't be
+    read from or written to — a corrupted local index, a disk I/O
+    failure, permission denied on persist_dir, and similar. Wraps
+    whatever chromadb's client raised so every caller (IngestionService,
+    RetrievalService) can catch ONE clean, purpose-built exception
+    instead of needing to know chromadb's own internal exception types.
+
+    Deliberately does NOT wrap the whole of add_chunks()/query()/
+    delete_by_document() — only the actual chromadb client calls inside
+    them. A bug in THIS class's own translation logic (e.g. the
+    strict=True zip() in query() below) is a different kind of failure
+    than "the vector store is unavailable," and should surface as
+    exactly what it is, not get relabeled as unavailability.
+    """
+
+
 class VectorStore:
     """Wraps a ChromaDB persistent (embedded) client — a real vector
     database, just running in-process and writing to local disk, the
@@ -43,6 +60,8 @@ class VectorStore:
         chunks: list[str],
         embeddings: list[list[float]],
         page_numbers: list[int | None] | None = None,
+        filename: str | None = None,
+        content_type: str | None = None,
     ) -> None:
         # IDs must be unique within the collection — "<document_id>:<index>"
         # is what lets re-processing the same document correctly REPLACE
@@ -62,31 +81,42 @@ class VectorStore:
             page_numbers = [None] * len(chunks)
 
         ids = [f"{document_id}:{i}" for i in range(len(chunks))]
-        metadatas = [
-            {
+        metadatas = []
+        for i in range(len(chunks)):
+            page_number = page_numbers[i]
+            metadata: dict[str, str | int] = {
                 "document_id": document_id,
                 "owner_id": owner_id,
                 "chunk_index": i,
-                "page_number": (
-                    page_numbers[i] if page_numbers[i] is not None else _NO_PAGE_NUMBER
-                ),
+                "page_number": page_number if page_number is not None else _NO_PAGE_NUMBER,
             }
-            for i in range(len(chunks))
-        ]
-        # chromadb's stubs declare `embeddings`/`metadatas` in terms of
-        # numpy ndarray types more specific than the plain Python
-        # list[list[float]]/list[dict] this method actually passes; at
-        # runtime the client accepts plain lists directly (proven by this
-        # project's own real, passing tests against a real embedded
-        # ChromaDB — see tests/test_vector_store.py). The stub being
-        # stricter than the library actually is, not a bug here — hence
-        # the ignore on the specific line mypy flags below.
-        self._collection.upsert(
-            ids=ids,
-            embeddings=embeddings,  # type: ignore[arg-type]
-            documents=chunks,
-            metadatas=metadatas,  # type: ignore[arg-type]
-        )
+            # Omitted entirely (not stored as a sentinel like page_number
+            # above) when not supplied — every real caller (IngestionService)
+            # always has both, so None here only happens in tests that
+            # don't care about these two fields.
+            if filename is not None:
+                metadata["filename"] = filename
+            if content_type is not None:
+                metadata["content_type"] = content_type
+            metadatas.append(metadata)
+
+        try:
+            # chromadb's stubs declare `embeddings`/`metadatas` in terms of
+            # numpy ndarray types more specific than the plain Python
+            # list[list[float]]/list[dict] this method actually passes; at
+            # runtime the client accepts plain lists directly (proven by this
+            # project's own real, passing tests against a real embedded
+            # ChromaDB — see tests/test_vector_store.py). The stub being
+            # stricter than the library actually is, not a bug here — hence
+            # the ignore on the specific line mypy flags below.
+            self._collection.upsert(
+                ids=ids,
+                embeddings=embeddings,  # type: ignore[arg-type]
+                documents=chunks,
+                metadatas=metadatas,  # type: ignore[arg-type]
+            )
+        except Exception as error:
+            raise VectorStoreUnavailableError(str(error)) from error
 
     def query(
         self, *, query_embedding: list[float], owner_id: str, top_k: int
@@ -98,13 +128,16 @@ class VectorStore:
         "which stored chunks are most semantically similar to this
         vector," which is exactly what RetrievalService calls this for.
         """
-        # Same stub-vs-reality gap as upsert() above — query_embeddings
-        # accepts a plain list[list[float]] at runtime.
-        results = self._collection.query(
-            query_embeddings=[query_embedding],  # type: ignore[arg-type]
-            n_results=top_k,
-            where={"owner_id": owner_id},
-        )
+        try:
+            # Same stub-vs-reality gap as upsert() above — query_embeddings
+            # accepts a plain list[list[float]] at runtime.
+            results = self._collection.query(
+                query_embeddings=[query_embedding],  # type: ignore[arg-type]
+                n_results=top_k,
+                where={"owner_id": owner_id},
+            )
+        except Exception as error:
+            raise VectorStoreUnavailableError(str(error)) from error
 
         chunks = []
         # Each indexed field's stub type is Optional (the Chroma API can
@@ -136,12 +169,21 @@ class VectorStore:
                     # "higher = more similar", the intuitive direction,
                     # rather than remembering which way distance runs.
                     "similarity_score": 1 - distance,
+                    # None for any chunk indexed before filename/content_type
+                    # were added to metadata, or for tests that never
+                    # supplied them to add_chunks() — not every caller of
+                    # this dict needs these two fields.
+                    "filename": metadata.get("filename"),
+                    "content_type": metadata.get("content_type"),
                 }
             )
         return chunks
 
     def delete_by_document(self, *, document_id: str) -> None:
-        self._collection.delete(where={"document_id": document_id})
+        try:
+            self._collection.delete(where={"document_id": document_id})
+        except Exception as error:
+            raise VectorStoreUnavailableError(str(error)) from error
 
     def count(self) -> int:
         # Test/verification convenience — not used by the ingestion

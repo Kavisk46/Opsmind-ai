@@ -7,6 +7,7 @@ from core.rate_limit import RateLimiter
 from models.user import User, UserRole
 from schemas.user import UserCreate, UserResponse
 from services.user_service import DuplicateEmailError, UserService
+from services.workspace_service import WorkspaceService
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -65,7 +66,7 @@ async def create_user(
     # layer only knows its own vocabulary.
     service = UserService(db)
     try:
-        return await service.create_user(
+        user = await service.create_user(
             email=payload.email, name=payload.name, password=payload.password
         )
     except DuplicateEmailError as error:
@@ -73,3 +74,10 @@ async def create_user(
             status_code=status.HTTP_409_CONFLICT,
             detail="An account with this email already exists.",
         ) from error
+
+    # Every user needs somewhere to upload/chat from the moment they sign
+    # up — a client should never have to create a workspace explicitly
+    # before doing anything else. See WorkspaceService.ensure_personal_
+    # workspace's own docstring for why this is safe to call unconditionally.
+    await WorkspaceService(db).ensure_personal_workspace(user.id, user.name)
+    return user

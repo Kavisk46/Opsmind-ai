@@ -1,5 +1,8 @@
+import asyncio
 import io
 import uuid
+
+from repositories.message_repository import MessageRepository
 
 
 def _auth_headers(client, email: str = "chat-user@example.com") -> dict:
@@ -141,6 +144,35 @@ def test_chat_empty_question_returns_400(client):
     headers = _auth_headers(client, email="chat-user5@example.com")
     response = client.post("/chat", headers=headers, json={"question": "   "})
     assert response.status_code == 400
+
+
+def test_chat_persists_provider_model_and_tool_used_as_message_metadata(client):
+    headers = _auth_headers(client, email="chat-metadata-persist@example.com")
+    _upload_document(client, headers)
+    response = client.post(
+        "/chat", headers=headers, json={"question": "What does OpsMind do?"}
+    )
+    conversation_id = uuid.UUID(response.json()["conversation_id"])
+
+    async def _fetch_messages():
+        async with client.session_factory() as session:
+            return await MessageRepository(session).list_by_conversation(conversation_id)
+
+    messages = asyncio.run(_fetch_messages())
+    user_message, assistant_message = messages
+
+    # A user message never has metadata to record — nothing about
+    # provider/model/tools applies to a question the human typed.
+    assert user_message.extra_metadata is None
+
+    assert assistant_message.extra_metadata["tool_used"] == "rag_retrieval"
+    assert assistant_message.extra_metadata["provider"] == "fake"
+    assert assistant_message.extra_metadata["model"] == "fake-model"
+    # FakeLLM.generate() (see conftest.py) doesn't set token counts —
+    # None here is honest ("not available"), matching how every real
+    # provider that can't report usage already behaves.
+    assert assistant_message.extra_metadata["prompt_tokens"] is None
+    assert assistant_message.extra_metadata["completion_tokens"] is None
 
 
 # /chat/stream is now a real, working endpoint (this phase's streaming

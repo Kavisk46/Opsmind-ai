@@ -1,6 +1,6 @@
 "use client";
 
-import { Send } from "lucide-react";
+import { Send, Square } from "lucide-react";
 import {
   useEffect,
   useRef,
@@ -18,9 +18,19 @@ const MAX_TEXTAREA_HEIGHT_PX = 200;
 interface ChatInputProps {
   onSend: (content: string) => void;
   disabled: boolean;
+  // While a reply is actively streaming in, the send button turns into a
+  // stop button — distinct from `disabled` (which also covers, e.g.,
+  // initial history loading, when there's nothing in-flight to cancel).
+  isGenerating?: boolean;
+  onCancel?: () => void;
 }
 
-export function ChatInput({ onSend, disabled }: ChatInputProps) {
+export function ChatInput({
+  onSend,
+  disabled,
+  isGenerating = false,
+  onCancel,
+}: ChatInputProps) {
   const [value, setValue] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -93,13 +103,24 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
             FOCUS_RING_CLASS
           )}
         />
-        <Button
-          type="submit"
-          disabled={disabled || !value.trim()}
-          aria-label="Send message"
-        >
-          <Send className="h-4 w-4" aria-hidden="true" />
-        </Button>
+        {isGenerating ? (
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onCancel}
+            aria-label="Stop generating"
+          >
+            <Square className="h-4 w-4" aria-hidden="true" />
+          </Button>
+        ) : (
+          <Button
+            type="submit"
+            disabled={disabled || !value.trim()}
+            aria-label="Send message"
+          >
+            <Send className="h-4 w-4" aria-hidden="true" />
+          </Button>
+        )}
       </div>
       {value.length > 0 && (
         <span

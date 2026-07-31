@@ -11,6 +11,15 @@ class ConversationCreateRequest(BaseModel):
     title: str | None = None
 
 
+class ConversationRenameRequest(BaseModel):
+    # Required, unlike ConversationCreateRequest.title — creating with no
+    # title has a sensible default ("New conversation"); explicitly
+    # renaming to nothing does not, so the route rejects it (see
+    # api/routes/conversations.py's empty-title check) rather than
+    # silently falling back to a default the caller never asked for.
+    title: str
+
+
 class ConversationResponse(BaseModel):
     id: uuid.UUID
     title: str

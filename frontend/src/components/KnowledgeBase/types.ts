@@ -1,4 +1,15 @@
-export type FileType = "markdown" | "pdf" | "doc" | "sheet" | "slide" | "image";
+// "text" and "csv" cover the real backend's text/plain and text/csv
+// uploads — added here rather than folded into an existing bucket since
+// neither is genuinely a markdown/doc/sheet/slide/image.
+export type FileType =
+  | "markdown"
+  | "pdf"
+  | "doc"
+  | "sheet"
+  | "slide"
+  | "image"
+  | "text"
+  | "csv";
 
 export interface Folder {
   id: string;

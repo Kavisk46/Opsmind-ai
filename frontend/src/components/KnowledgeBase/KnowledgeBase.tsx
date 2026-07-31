@@ -3,17 +3,23 @@
 import { ChevronRight, Clock, FolderOpen, Star } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
+import { useAuth } from "@/components/Providers/AuthProvider";
+import { ConfirmDialog, openConfirmDialog } from "@/components/Settings/ConfirmDialog";
 import { Button } from "@/components/ui/button";
-import { useSimulatedLoad } from "@/hooks/use-simulated-load";
-import categoriesData from "@/lib/mock-data/kb-categories.json";
-import documentsData from "@/lib/mock-data/kb-documents.json";
-import foldersData from "@/lib/mock-data/kb-folders.json";
-import tagsData from "@/lib/mock-data/kb-tags.json";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
+import { getFriendlyErrorMessage, normalizeError } from "@/lib/api";
+import { toast } from "@/lib/toast";
 import { FOCUS_RING_CLASS, cn } from "@/lib/utils";
 import { useModalStore } from "@/store/modal-store";
 
 import { filterDocuments, sortDocuments } from "./document-filters";
 import { DocumentGrid } from "./DocumentGrid";
+import {
+  toKbDocument,
+  useDeleteDocument,
+  useSearchDocuments,
+  type SortOption as BackendSortOption,
+} from "./documents-api";
 import { DOCUMENT_VIEWER_MODAL_ID, DocumentViewer } from "./DocumentViewer";
 import { EmptyState } from "./EmptyState";
 import { FilterBar } from "./FilterBar";
@@ -21,42 +27,70 @@ import { getDescendantFolderIds, getFolderPath } from "./folder-tree";
 import { FolderTree } from "./FolderTree";
 import { useFavoritesStore } from "./store/favorites-store";
 import { useRecentDocumentsStore } from "./store/recent-documents-store";
-import type {
-  Category,
-  Document,
-  Folder,
-  SortOption,
-  Tag,
-  ViewMode,
-} from "./types";
+import type { Category, Folder, SortOption, Tag, ViewMode } from "./types";
 import { UploadModal } from "./UploadModal";
 import { ViewTabs } from "./ViewTabs";
 
-const folders = foldersData as Folder[];
-const documents = documentsData as Document[];
-const categories = categoriesData as Category[];
-const tags = tagsData as Tag[];
+// Folders/categories/tags have no backend equivalent yet (verified: no
+// such fields anywhere in backend/models/document.py or schemas/
+// document.py) — always empty rather than mock data. FolderTree,
+// CategoryFilter, and TagFilter each already render a correct, honest
+// "nothing to group by yet" state when given empty arrays (just "All
+// Documents" / "All categories" / no toggleable tags), which is what
+// actually happens here, not a fabricated organizational structure.
+const folders: Folder[] = [];
+const categories: Category[] = [];
+const tags: Tag[] = [];
+
+function toBackendSort(option: SortOption): BackendSortOption {
+  // Only the two date-based options have a direct backend equivalent —
+  // title-asc/title-desc have no server-side concept (GET /documents/search
+  // never sorts by filename), so those request the same "newest" default
+  // and get their real, correct order from the existing client-side
+  // sortDocuments() call below instead, exactly as it already did for
+  // every sort option before real data existed.
+  return option === "updated-asc" ? "oldest" : "newest";
+}
 
 export function KnowledgeBase() {
+  const { user } = useAuth();
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [isFolderListOpen, setIsFolderListOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const debouncedQuery = useDebouncedValue(query, 300);
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [tagIds, setTagIds] = useState<string[]>([]);
   const [sortOption, setSortOption] = useState<SortOption>("updated-desc");
   const [viewMode, setViewMode] = useState<ViewMode>("all");
-  const isLoading = useSimulatedLoad();
 
   const favoriteIds = useFavoritesStore((state) => state.favoriteIds);
   const toggleFavorite = useFavoritesStore((state) => state.toggleFavorite);
   const recentIds = useRecentDocumentsStore((state) => state.recentIds);
   const recordView = useRecentDocumentsStore((state) => state.recordView);
   const openModal = useModalStore((state) => state.openModal);
+  const deleteMutation = useDeleteDocument();
+
+  const searchQuery = useSearchDocuments({
+    q: debouncedQuery.trim() || undefined,
+    sort: toBackendSort(sortOption),
+  });
 
   useEffect(() => {
     useFavoritesStore.persist.rehydrate();
     useRecentDocumentsStore.persist.rehydrate();
   }, []);
+
+  useEffect(() => {
+    if (searchQuery.error) {
+      toast(getFriendlyErrorMessage(normalizeError(searchQuery.error)));
+    }
+  }, [searchQuery.error]);
+
+  const authorName = user?.name ?? "You";
+  const documents = useMemo(
+    () => (searchQuery.data ?? []).map((document) => toKbDocument(document, authorName)),
+    [searchQuery.data, authorName]
+  );
 
   const folderPath = useMemo(
     () => (selectedFolderId ? getFolderPath(folders, selectedFolderId) : []),
@@ -72,7 +106,7 @@ export function KnowledgeBase() {
   const filtered = useMemo(
     () =>
       filterDocuments(documents, {
-        query,
+        query: "", // filename matching already happened server-side via `q`
         categoryId,
         tagIds,
         folderDescendantIds,
@@ -80,7 +114,7 @@ export function KnowledgeBase() {
         favoriteIds,
         recentIds,
       }),
-    [query, categoryId, tagIds, folderDescendantIds, viewMode, favoriteIds, recentIds]
+    [documents, categoryId, tagIds, folderDescendantIds, viewMode, favoriteIds, recentIds]
   );
 
   // "Recent" is already in most-recently-viewed order from filterDocuments —
@@ -106,11 +140,44 @@ export function KnowledgeBase() {
     openModal(DOCUMENT_VIEWER_MODAL_ID, { documentId });
   };
 
+  const handleDeleteDocument = (documentId: string, title: string) => {
+    openConfirmDialog({
+      title: "Delete document",
+      description: `"${title}" will be permanently deleted. This can't be undone.`,
+      confirmLabel: "Delete",
+      variant: "destructive",
+      onConfirm: () => {
+        deleteMutation.mutate(documentId, {
+          onSuccess: () => toast("Document deleted."),
+          onError: (error) => toast(getFriendlyErrorMessage(normalizeError(error))),
+        });
+      },
+    });
+  };
+
   const activeFolderName = selectedFolderId
     ? (folderPath[folderPath.length - 1]?.name ?? "Folder")
     : "All Documents";
 
   const emptyState = (() => {
+    if (searchQuery.error) {
+      return (
+        <EmptyState
+          title="Couldn't load documents"
+          description="Something went wrong reaching the server. Try again in a moment."
+          action={
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => searchQuery.refetch()}
+            >
+              Retry
+            </Button>
+          }
+        />
+      );
+    }
     if (viewMode === "favorites" && !hasActiveFilters && !selectedFolderId) {
       return (
         <EmptyState
@@ -126,6 +193,14 @@ export function KnowledgeBase() {
           icon={Clock}
           title="No recent documents"
           description="Documents you open will show up here."
+        />
+      );
+    }
+    if (!hasActiveFilters && !selectedFolderId) {
+      return (
+        <EmptyState
+          title="No documents yet"
+          description="Upload your first document to start building your knowledge base."
         />
       );
     }
@@ -266,7 +341,7 @@ export function KnowledgeBase() {
           />
 
           <p aria-live="polite" className="text-sm text-muted-foreground">
-            {isLoading
+            {searchQuery.isPending
               ? "Loading documents…"
               : `${results.length} ${results.length === 1 ? "document" : "documents"}`}
           </p>
@@ -283,15 +358,17 @@ export function KnowledgeBase() {
               favoriteIds={favoriteIds}
               onToggleFavorite={toggleFavorite}
               onOpenDocument={handleOpenDocument}
-              isLoading={isLoading}
+              onDeleteDocument={handleDeleteDocument}
+              isLoading={searchQuery.isPending}
               emptyState={emptyState}
             />
           </div>
         </div>
       </div>
 
-      <DocumentViewer documents={documents} />
+      <DocumentViewer documents={documents} onDeleteDocument={handleDeleteDocument} />
       <UploadModal />
+      <ConfirmDialog />
     </>
   );
 }

@@ -11,6 +11,7 @@ import { FOCUS_RING_CLASS, cn } from "@/lib/utils";
 import {
   CONVERSATIONS_QUERY_KEY,
   deleteConversation,
+  renameConversation,
   useConversations,
   type Conversation as BackendConversation,
 } from "./chat-api";
@@ -126,6 +127,25 @@ export function AssistantConsole() {
     });
   };
 
+  const handleRenameConversation = (id: string, title: string) => {
+    const previous = conversationsQuery.data;
+    queryClient.setQueryData(
+      CONVERSATIONS_QUERY_KEY,
+      (prev: BackendConversation[] | undefined) =>
+        (prev ?? []).map((conversation) =>
+          conversation.id === id ? { ...conversation, title } : conversation
+        )
+    );
+
+    renameConversation(id, title).catch((error) => {
+      toast(getFriendlyErrorMessage(normalizeError(error)));
+      // Failed server-side (e.g. the 400 an empty title would trigger) —
+      // restore rather than leave the sidebar showing a title the
+      // backend never actually accepted.
+      queryClient.setQueryData(CONVERSATIONS_QUERY_KEY, previous);
+    });
+  };
+
   const conversations = (conversationsQuery.data ?? []).map(toUiConversation);
   const isLoadingConversations = conversationsQuery.isPending;
   const activeConversation = conversations.find(
@@ -165,6 +185,7 @@ export function AssistantConsole() {
             onSelectConversation={handleSelectConversation}
             onNewChat={handleNewChat}
             onDeleteConversation={handleDeleteConversation}
+            onRenameConversation={handleRenameConversation}
           />
         )}
       </div>
@@ -184,6 +205,7 @@ export function AssistantConsole() {
             onSelectConversation={handleSelectConversation}
             onNewChat={handleNewChat}
             onDeleteConversation={handleDeleteConversation}
+            onRenameConversation={handleRenameConversation}
             onClose={() => setIsListOpen(false)}
           />
         </div>

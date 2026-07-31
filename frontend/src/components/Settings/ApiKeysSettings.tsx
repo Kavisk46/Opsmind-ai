@@ -1,8 +1,9 @@
 "use client";
 
-import { Copy, Key, Plus } from "lucide-react";
+import { Key, Plus } from "lucide-react";
 import { useState } from "react";
 
+import { ClipboardButton } from "@/components/Clipboard";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -20,7 +21,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { useCopyToClipboard } from "@/hooks/use-copy-to-clipboard";
 import { useSimulatedLoad } from "@/hooks/use-simulated-load";
 import { formatDate } from "@/lib/format";
 import apiKeysData from "@/lib/mock-data/admin-api-keys.json";
@@ -62,7 +62,6 @@ export function ApiKeysSettings() {
   const [newKey, setNewKey] = useState<{ id: string; fullKey: string } | null>(
     null
   );
-  const { copied, copy } = useCopyToClipboard();
 
   if (isLoading) {
     return <SettingsPageSkeleton />;
@@ -124,16 +123,14 @@ export function ApiKeysSettings() {
               <code className="flex-1 truncate rounded border border-border bg-background px-2 py-1.5 text-xs">
                 {newKey.fullKey}
               </code>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => copy(newKey.fullKey)}
-                className="shrink-0 gap-1.5"
-              >
-                <Copy className="h-3.5 w-3.5" aria-hidden="true" />
-                {copied ? "Copied" : "Copy"}
-              </Button>
+              <ClipboardButton
+                text={newKey.fullKey}
+                ariaLabel="Copy API key"
+                label="Copy"
+                variant="inline"
+                successMessage="API key copied to clipboard"
+                className="h-8 rounded-md border border-border px-3 hover:bg-accent"
+              />
             </div>
           </div>
         )}

@@ -35,13 +35,19 @@ def get_llm_provider(settings: Settings) -> LLMProvider:
             api_key=settings.llm_api_key,
             model=settings.llm_model_name,
             temperature=settings.llm_temperature,
+            top_p=settings.llm_top_p,
             max_output_tokens=settings.llm_max_output_tokens,
             timeout_seconds=settings.llm_request_timeout_seconds,
         )
 
     if settings.llm_provider == "anthropic":
         return AnthropicProvider(
-            api_key=settings.llm_api_key, model=settings.llm_model_name
+            api_key=settings.llm_api_key,
+            model=settings.llm_model_name,
+            temperature=settings.llm_temperature,
+            top_p=settings.llm_top_p,
+            max_output_tokens=settings.llm_max_output_tokens,
+            timeout_seconds=settings.llm_request_timeout_seconds,
         )
 
     if settings.llm_provider == "ollama":

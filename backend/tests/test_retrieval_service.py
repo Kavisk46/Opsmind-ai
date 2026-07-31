@@ -158,6 +158,35 @@ def test_retrieve_returns_multiple_chunks_in_the_order_the_vector_store_returned
     assert [c.text for c in chunks] == ["first", "second"]
 
 
+def test_retrieve_surfaces_filename_when_the_vector_store_provides_it():
+    # VectorStore.query() now includes "filename" in its result dicts
+    # (see core/vector_store.py) — this proves retrieve() actually reads
+    # it through, not just that RetrievedChunk has the field.
+    results = [_chunk_result(text="quarterly numbers")]
+    results[0]["filename"] = "q3-report.pdf"
+    service = RetrievalService(
+        embedding_model=FakeEmbeddingModel(), vector_store=FakeVectorStore(results=results)
+    )
+
+    chunks = service.retrieve(query="anything", owner_id=uuid.uuid4(), top_k=5)
+
+    assert chunks[0].filename == "q3-report.pdf"
+
+
+def test_retrieve_defaults_filename_to_none_when_the_vector_store_omits_it():
+    # _chunk_result() (this file's fake) doesn't include "filename" —
+    # proves retrieve() tolerates a vector_store implementation that
+    # predates this field, rather than raising KeyError.
+    service = RetrievalService(
+        embedding_model=FakeEmbeddingModel(),
+        vector_store=FakeVectorStore(results=[_chunk_result()]),
+    )
+
+    chunks = service.retrieve(query="anything", owner_id=uuid.uuid4(), top_k=5)
+
+    assert chunks[0].filename is None
+
+
 def test_retrieve_returns_empty_list_when_vector_store_finds_nothing():
     # Arrange
     service = RetrievalService(

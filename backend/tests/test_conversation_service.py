@@ -7,24 +7,35 @@ import pytest
 from services.conversation_service import (
     ConversationNotFoundError,
     ConversationService,
+    EmptyTitleError,
     estimate_tokens,
 )
 
+# A single fixed workspace_id reused across every test in this file —
+# ConversationService.get_or_create_conversation only stamps workspace_id
+# onto a new Conversation for organizational/audit purposes (see
+# models/conversation.py's own docstring); visibility/ownership scoping
+# stays owner_id-based, so no test here actually needs a REAL, distinct
+# workspace per case the way the repository/route-level tests do.
+_WORKSPACE_ID = uuid.uuid4()
+
 
 class _FakeConversation:
-    def __init__(self, id, user_id, title):
+    def __init__(self, id, user_id, workspace_id, title):
         self.id = id
         self.user_id = user_id
+        self.workspace_id = workspace_id
         self.title = title
         self.updated_at = datetime.now(UTC)
 
 
 class _FakeMessage:
-    def __init__(self, id, conversation_id, role, content):
+    def __init__(self, id, conversation_id, role, content, extra_metadata=None):
         self.id = id
         self.conversation_id = conversation_id
         self.role = role
         self.content = content
+        self.extra_metadata = extra_metadata
 
 
 class FakeConversationStore:
@@ -36,8 +47,8 @@ class FakeConversationStore:
     def __init__(self):
         self.conversations: dict[uuid.UUID, _FakeConversation] = {}
 
-    async def create(self, *, user_id, title):
-        conversation = _FakeConversation(uuid.uuid4(), user_id, title)
+    async def create(self, *, user_id, workspace_id, title):
+        conversation = _FakeConversation(uuid.uuid4(), user_id, workspace_id, title)
         self.conversations[conversation.id] = conversation
         return conversation
 
@@ -64,8 +75,8 @@ class FakeMessageStore:
     def __init__(self):
         self.messages: list[_FakeMessage] = []
 
-    async def create(self, *, conversation_id, role, content):
-        message = _FakeMessage(uuid.uuid4(), conversation_id, role, content)
+    async def create(self, *, conversation_id, role, content, extra_metadata=None):
+        message = _FakeMessage(uuid.uuid4(), conversation_id, role, content, extra_metadata)
         self.messages.append(message)
         return message
 
@@ -99,11 +110,15 @@ def test_get_or_create_conversation_creates_new_when_no_id_given():
 
     conversation = asyncio.run(
         service.get_or_create_conversation(
-            owner_id=owner_id, conversation_id=None, title_hint="First question"
+            owner_id=owner_id,
+            workspace_id=_WORKSPACE_ID,
+            conversation_id=None,
+            title_hint="First question",
         )
     )
 
     assert conversation.user_id == owner_id
+    assert conversation.workspace_id == _WORKSPACE_ID
     assert conversation.title == "First question"
 
 
@@ -112,13 +127,19 @@ def test_get_or_create_conversation_returns_existing_when_id_given():
     owner_id = uuid.uuid4()
     created = asyncio.run(
         service.get_or_create_conversation(
-            owner_id=owner_id, conversation_id=None, title_hint="hello"
+            owner_id=owner_id,
+            workspace_id=_WORKSPACE_ID,
+            conversation_id=None,
+            title_hint="hello",
         )
     )
 
     fetched = asyncio.run(
         service.get_or_create_conversation(
-            owner_id=owner_id, conversation_id=created.id, title_hint="ignored"
+            owner_id=owner_id,
+            workspace_id=_WORKSPACE_ID,
+            conversation_id=created.id,
+            title_hint="ignored",
         )
     )
 
@@ -131,14 +152,20 @@ def test_get_or_create_conversation_raises_for_other_owners_conversation():
     owner_b = uuid.uuid4()
     created = asyncio.run(
         service.get_or_create_conversation(
-            owner_id=owner_a, conversation_id=None, title_hint="hello"
+            owner_id=owner_a,
+            workspace_id=_WORKSPACE_ID,
+            conversation_id=None,
+            title_hint="hello",
         )
     )
 
     with pytest.raises(ConversationNotFoundError):
         asyncio.run(
             service.get_or_create_conversation(
-                owner_id=owner_b, conversation_id=created.id, title_hint="ignored"
+                owner_id=owner_b,
+                workspace_id=_WORKSPACE_ID,
+                conversation_id=created.id,
+                title_hint="ignored",
             )
         )
 
@@ -151,7 +178,10 @@ def test_append_message_bumps_conversation_updated_at():
     owner_id = uuid.uuid4()
     conversation = asyncio.run(
         service.get_or_create_conversation(
-            owner_id=owner_id, conversation_id=None, title_hint="hello"
+            owner_id=owner_id,
+            workspace_id=_WORKSPACE_ID,
+            conversation_id=None,
+            title_hint="hello",
         )
     )
     original_updated_at = conversation.updated_at
@@ -176,12 +206,18 @@ def test_list_conversations_orders_most_recently_updated_first():
     owner_id = uuid.uuid4()
     first = asyncio.run(
         service.get_or_create_conversation(
-            owner_id=owner_id, conversation_id=None, title_hint="first"
+            owner_id=owner_id,
+            workspace_id=_WORKSPACE_ID,
+            conversation_id=None,
+            title_hint="first",
         )
     )
     second = asyncio.run(
         service.get_or_create_conversation(
-            owner_id=owner_id, conversation_id=None, title_hint="second"
+            owner_id=owner_id,
+            workspace_id=_WORKSPACE_ID,
+            conversation_id=None,
+            title_hint="second",
         )
     )
     # Touch the FIRST conversation last, so it should now sort ahead of
@@ -204,7 +240,10 @@ def test_delete_conversation_removes_it():
     owner_id = uuid.uuid4()
     conversation = asyncio.run(
         service.get_or_create_conversation(
-            owner_id=owner_id, conversation_id=None, title_hint="hello"
+            owner_id=owner_id,
+            workspace_id=_WORKSPACE_ID,
+            conversation_id=None,
+            title_hint="hello",
         )
     )
 
@@ -221,7 +260,10 @@ def test_delete_conversation_raises_for_other_owners_conversation():
     owner_b = uuid.uuid4()
     conversation = asyncio.run(
         service.get_or_create_conversation(
-            owner_id=owner_a, conversation_id=None, title_hint="hello"
+            owner_id=owner_a,
+            workspace_id=_WORKSPACE_ID,
+            conversation_id=None,
+            title_hint="hello",
         )
     )
 
@@ -229,6 +271,154 @@ def test_delete_conversation_raises_for_other_owners_conversation():
         asyncio.run(
             service.delete_conversation(owner_id=owner_b, conversation_id=conversation.id)
         )
+
+
+# --- rename_conversation() ---
+
+
+def test_rename_conversation_updates_the_title():
+    service = _make_service()
+    owner_id = uuid.uuid4()
+    conversation = asyncio.run(
+        service.get_or_create_conversation(
+            owner_id=owner_id,
+            workspace_id=_WORKSPACE_ID,
+            conversation_id=None,
+            title_hint="original",
+        )
+    )
+
+    renamed = asyncio.run(
+        service.rename_conversation(
+            owner_id=owner_id, conversation_id=conversation.id, title="new title"
+        )
+    )
+
+    assert renamed.title == "new title"
+    refetched = asyncio.run(service.conversation_repository.get_by_id(conversation.id))
+    assert refetched.title == "new title"
+
+
+def test_rename_conversation_strips_whitespace():
+    service = _make_service()
+    owner_id = uuid.uuid4()
+    conversation = asyncio.run(
+        service.get_or_create_conversation(
+            owner_id=owner_id,
+            workspace_id=_WORKSPACE_ID,
+            conversation_id=None,
+            title_hint="original",
+        )
+    )
+
+    renamed = asyncio.run(
+        service.rename_conversation(
+            owner_id=owner_id, conversation_id=conversation.id, title="  padded title  "
+        )
+    )
+
+    assert renamed.title == "padded title"
+
+
+def test_rename_conversation_rejects_empty_title():
+    service = _make_service()
+    owner_id = uuid.uuid4()
+    conversation = asyncio.run(
+        service.get_or_create_conversation(
+            owner_id=owner_id,
+            workspace_id=_WORKSPACE_ID,
+            conversation_id=None,
+            title_hint="original",
+        )
+    )
+
+    with pytest.raises(EmptyTitleError):
+        asyncio.run(
+            service.rename_conversation(
+                owner_id=owner_id, conversation_id=conversation.id, title="   "
+            )
+        )
+
+
+def test_rename_conversation_raises_for_other_owners_conversation():
+    service = _make_service()
+    owner_a = uuid.uuid4()
+    owner_b = uuid.uuid4()
+    conversation = asyncio.run(
+        service.get_or_create_conversation(
+            owner_id=owner_a,
+            workspace_id=_WORKSPACE_ID,
+            conversation_id=None,
+            title_hint="original",
+        )
+    )
+
+    with pytest.raises(ConversationNotFoundError):
+        asyncio.run(
+            service.rename_conversation(
+                owner_id=owner_b, conversation_id=conversation.id, title="hijacked"
+            )
+        )
+
+
+def test_rename_conversation_raises_for_unknown_conversation():
+    service = _make_service()
+    with pytest.raises(ConversationNotFoundError):
+        asyncio.run(
+            service.rename_conversation(
+                owner_id=uuid.uuid4(), conversation_id=uuid.uuid4(), title="anything"
+            )
+        )
+
+
+# --- append_message() metadata ---
+
+
+def test_append_message_persists_metadata():
+    service = _make_service()
+    owner_id = uuid.uuid4()
+    conversation = asyncio.run(
+        service.get_or_create_conversation(
+            owner_id=owner_id,
+            workspace_id=_WORKSPACE_ID,
+            conversation_id=None,
+            title_hint="hello",
+        )
+    )
+
+    message = asyncio.run(
+        service.append_message(
+            conversation_id=conversation.id,
+            role="assistant",
+            content="an answer",
+            metadata={"tool_used": "rag_retrieval", "provider": "local", "model": "test-model"},
+        )
+    )
+
+    assert message.extra_metadata == {
+        "tool_used": "rag_retrieval", "provider": "local", "model": "test-model"
+    }
+
+
+def test_append_message_defaults_metadata_to_none():
+    service = _make_service()
+    owner_id = uuid.uuid4()
+    conversation = asyncio.run(
+        service.get_or_create_conversation(
+            owner_id=owner_id,
+            workspace_id=_WORKSPACE_ID,
+            conversation_id=None,
+            title_hint="hello",
+        )
+    )
+
+    message = asyncio.run(
+        service.append_message(
+            conversation_id=conversation.id, role="user", content="a question"
+        )
+    )
+
+    assert message.extra_metadata is None
 
 
 # --- prepare_history_for_prompt() token budgeting ---

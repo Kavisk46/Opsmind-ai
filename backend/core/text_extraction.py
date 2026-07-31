@@ -1,6 +1,10 @@
+import csv
 import io
 
+from docx import Document as DocxDocument
 from pypdf import PdfReader
+
+_DOCX_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 
 # The single source of truth for "what file types can this pipeline
 # actually do anything with" — imported by services/document_service.py
@@ -9,7 +13,9 @@ from pypdf import PdfReader
 # ingestion (see IngestionService.process_document), after the file has
 # already been accepted, stored, and the client told 202. One constant,
 # not two independently-maintained lists that could drift apart.
-SUPPORTED_CONTENT_TYPES = frozenset({"text/plain", "text/markdown", "application/pdf"})
+SUPPORTED_CONTENT_TYPES = frozenset(
+    {"text/plain", "text/markdown", "application/pdf", _DOCX_CONTENT_TYPE, "text/csv"}
+)
 
 
 class UnsupportedContentTypeError(Exception):
@@ -43,6 +49,32 @@ def extract_text(*, content_type: str, data: bytes) -> list[tuple[int | None, st
             (page_index + 1, page.extract_text() or "")
             for page_index, page in enumerate(reader.pages)
         ]
+
+    if content_type == _DOCX_CONTENT_TYPE:
+        # Unlike PDF, a .docx file has no fixed "page" concept at the XML
+        # level — pagination is computed at render time by whatever
+        # opens it (Word, LibreOffice), not stored in the file itself.
+        # Same honest answer as plain text/Markdown: page_number is None,
+        # not a guess.
+        document = DocxDocument(io.BytesIO(data))
+        text = "\n".join(paragraph.text for paragraph in document.paragraphs)
+        return [(None, text)]
+
+    if content_type == "text/csv":
+        # Rendered as "column: value" pairs per row, not a raw
+        # comma-joined line — a bare "Alice, 30, Engineering" carries no
+        # semantic meaning for an embedding model or a keyword search to
+        # latch onto; "name: Alice, age: 30, department: Engineering"
+        # does. DictReader assumes the first row is a header, the normal
+        # shape for a CSV export — same "handle the common case honestly,
+        # don't over-engineer for the rest" reasoning as this module's
+        # other formats.
+        csv_reader = csv.DictReader(io.StringIO(data.decode("utf-8", errors="replace")))
+        lines = [
+            ", ".join(f"{column}: {value}" for column, value in row.items())
+            for row in csv_reader
+        ]
+        return [(None, "\n".join(lines))]
 
     raise UnsupportedContentTypeError(content_type)
 

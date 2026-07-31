@@ -250,6 +250,54 @@ export class ApiClient {
   }
 
   /**
+   * Fetches a GET endpoint's raw bytes as a Blob instead of parsed JSON —
+   * for previewing binary content (images, PDFs) client-side, where
+   * get()'s JSON/text-oriented parseResponse() would corrupt binary data
+   * by running it through response.text(). Reuses the same base URL,
+   * auth-token interceptor, timeout, and error handling as get(); no
+   * retry loop — re-fetching a whole binary blob automatically on a
+   * transient failure isn't worth it for a preview fetch the same way it
+   * is for a small JSON request, and a caller that wants one can just
+   * call this again.
+   */
+  async getBlob(path: string, options: ApiRequestOptions = {}): Promise<Blob> {
+    const headers = new Headers(options.headers);
+    const timeoutController = new AbortController();
+    const timeoutId = setTimeout(
+      () =>
+        timeoutController.abort(
+          new DOMException("Request timed out", "TimeoutError")
+        ),
+      options.timeoutMs ?? DEFAULT_TIMEOUT_MS
+    );
+
+    try {
+      const config = await this.requestInterceptors.run({
+        url: this.buildUrl(path),
+        method: "GET",
+        headers,
+        body: undefined,
+        signal: mergeSignals([options.signal, timeoutController.signal]),
+      });
+
+      const response = await fetch(config.url, {
+        method: config.method,
+        headers: config.headers,
+        signal: config.signal,
+        credentials: "include",
+      });
+
+      if (!response.ok) {
+        throw await this.buildErrorFromResponse(response);
+      }
+
+      return await response.blob();
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
+  /**
    * Multipart file upload with progress — fetch() has no reliable
    * cross-browser upload-progress event, so this uses XMLHttpRequest
    * instead, but still reuses this client's base URL, auth-token request

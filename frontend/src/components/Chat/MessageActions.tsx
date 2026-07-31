@@ -1,9 +1,9 @@
 "use client";
 
-import { Check, Copy, RotateCcw, ThumbsDown, ThumbsUp } from "lucide-react";
+import { RotateCcw, ThumbsDown, ThumbsUp } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
-import { useCopyToClipboard } from "@/hooks/use-copy-to-clipboard";
+import { ClipboardButton, ClipboardMenu } from "@/components/Clipboard";
 import { FOCUS_RING_CLASS, cn } from "@/lib/utils";
 
 import type { MessageRole } from "./types";
@@ -28,7 +28,6 @@ export function MessageActions({
   onRegenerate,
   disabled = false,
 }: MessageActionsProps) {
-  const { copied, copy } = useCopyToClipboard();
   const [feedback, setFeedback] = useState<Feedback>(null);
   const isAssistant = role === "assistant";
 
@@ -45,19 +44,19 @@ export function MessageActions({
 
   return (
     <div className="flex items-center gap-1 text-muted-foreground">
-      <button
-        type="button"
-        onClick={() => copy(content)}
-        disabled={disabled}
-        aria-label="Copy message"
-        className={buttonClass}
-      >
-        {copied ? (
-          <Check className="h-3.5 w-3.5" aria-hidden="true" />
-        ) : (
-          <Copy className="h-3.5 w-3.5" aria-hidden="true" />
-        )}
-      </button>
+      {isAssistant ? (
+        // Assistant replies are markdown (see MessageBubble's
+        // MarkdownRenderer) — worth offering both a Markdown-source copy
+        // and a plain-text copy, unlike a user's own message below.
+        <ClipboardMenu markdown={content} ariaLabel="Copy message" disabled={disabled} />
+      ) : (
+        <ClipboardButton
+          text={content}
+          ariaLabel="Copy message"
+          disabled={disabled}
+          className={buttonClass}
+        />
+      )}
 
       {isAssistant && (
         <>

@@ -18,9 +18,11 @@ from api.routes import (
     health,
     metrics,
     oauth,
+    retrieval,
     root,
     status,
     users,
+    workspaces,
 )
 from core.config import INSECURE_DEFAULT_SECRET_KEY, settings
 from core.database import engine
@@ -373,3 +375,5 @@ app.include_router(documents.router)
 app.include_router(chat.router)
 app.include_router(conversations.router)
 app.include_router(ai_metrics.router)
+app.include_router(retrieval.router)
+app.include_router(workspaces.router)

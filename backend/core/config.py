@@ -124,6 +124,26 @@ class Settings(BaseSettings):
     # RAG: how many chunks to retrieve per question.
     retrieval_top_k: int = 5
 
+    # Hybrid retrieval (Retrieval Engine phase). max_context_tokens bounds
+    # ContextService.assemble()'s output — same "modest budget, leave room
+    # for the rest of the prompt" reasoning as max_history_tokens above,
+    # just for retrieved document context instead of conversation history.
+    # vector_weight/keyword_weight are WeightedReranker's fusion weights;
+    # they sum to 1.0 by convention (not enforced) so combined_score stays
+    # on roughly the same 0-1 scale as either input score alone. Vector
+    # similarity is weighted higher by default — semantic relevance is
+    # usually a stronger signal than exact keyword overlap for this kind
+    # of document search, with keyword search mainly there to catch
+    # exact-term matches (names, error codes, filenames) semantic search
+    # can sometimes miss. max_returned_chunks caps how many chunks survive
+    # reranking into the final response, independent of retrieval_top_k
+    # (which bounds how many CANDIDATES each individual search leg
+    # considers before fusion).
+    retrieval_max_context_tokens: int = 2000
+    retrieval_vector_weight: float = 0.7
+    retrieval_keyword_weight: float = 0.3
+    retrieval_max_returned_chunks: int = 10
+
     # Which LLM backend answers questions, and how. "local" (the default)
     # stays the free, no-API-key, no-external-dependency choice this
     # project has deliberately used throughout — switching to "openai" or
@@ -148,12 +168,26 @@ class Settings(BaseSettings):
     # deliberate default; this makes that choice an explicit, visible
     # setting instead of a hardcoded implementation detail.
     llm_temperature: float = 0.0
+    # 1.0 (no nucleus truncation) matches every provider's own SDK default
+    # — only meaningful for network-based providers actually sampling
+    # (openai/anthropic); the local provider's do_sample=False (greedy
+    # decoding) ignores top_p entirely, so it's deliberately not threaded
+    # through to LocalTransformersProvider at all.
+    llm_top_p: float = 1.0
     llm_max_output_tokens: int = 256
     # Only meaningful for network-based providers (openai/anthropic) —
     # the local provider runs in-process with no request to time out.
     # Still a shared setting rather than provider-specific, for the same
     # "only one provider active at once" reason as llm_model_name.
     llm_request_timeout_seconds: float = 30.0
+
+    # A real, checked toggle — not just an unused config field. POST
+    # /chat/stream returns 503 when this is False (see api/routes/chat.py),
+    # so disabling streaming (e.g. a deployment behind a proxy that
+    # buffers responses and breaks SSE) is a config change, not a code
+    # change. True by default: streaming is this project's primary,
+    # already-working chat experience.
+    streaming_enabled: bool = True
 
     # How many prior messages (user + assistant combined) PromptBuilder
     # includes as conversation history — see services/prompt_builder.py.

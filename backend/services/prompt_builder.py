@@ -35,6 +35,20 @@ _CHAT_SYSTEM_PROMPTS = {
         "You are OpsMind. Answer in at most 3 sentences, as concisely as "
         f"possible. {_GROUNDING_INSTRUCTIONS}"
     ),
+    # AskService's (services/ask_service.py) system prompt — a separate
+    # PromptBuilder instance is constructed with this version specifically
+    # for POST /chat/ask, so this exists as an ADDITIONAL key, never
+    # replacing "v1" (which /chat keeps using unmodified). Wording is this
+    # phase's own literal requirement — explicit refusal phrase, markdown
+    # output — distinct enough from v1's wording to warrant its own
+    # version rather than reusing v1 and hoping the difference doesn't
+    # matter.
+    "ask_v1": (
+        "You are OpsMind AI. Answer ONLY from the provided context. Never "
+        "hallucinate — if the context is insufficient to answer, respond "
+        'exactly with "I don\'t have enough information." '
+        f"{_GROUNDING_INSTRUCTIONS} Format your response as markdown."
+    ),
 }
 
 _SUMMARIZATION_SYSTEM_PROMPTS = {

@@ -4,7 +4,7 @@ import uuid
 
 import pytest
 
-from core.vector_store import VectorStore
+from core.vector_store import VectorStore, VectorStoreUnavailableError
 
 # Real ChromaDB, not a fake — deliberately. VectorStore has no network
 # dependency at all (chromadb.PersistentClient is embedded, writing to
@@ -152,6 +152,74 @@ def test_count_reflects_additions(vector_store):
     )
 
     assert vector_store.count() == 2
+
+
+# --- filename / content_type metadata ---
+
+
+def test_filename_and_content_type_round_trip_through_metadata(vector_store):
+    owner_id = str(uuid.uuid4())
+    vector_store.add_chunks(
+        document_id=str(uuid.uuid4()), owner_id=owner_id,
+        chunks=["some text"], embeddings=[_vec(1.0, 0.0)],
+        filename="report.pdf", content_type="application/pdf",
+    )
+
+    results = vector_store.query(query_embedding=_vec(1.0, 0.0), owner_id=owner_id, top_k=1)
+
+    assert results[0]["filename"] == "report.pdf"
+    assert results[0]["content_type"] == "application/pdf"
+
+
+def test_filename_and_content_type_are_none_when_not_supplied(vector_store):
+    owner_id = str(uuid.uuid4())
+    vector_store.add_chunks(
+        document_id=str(uuid.uuid4()), owner_id=owner_id,
+        chunks=["some text"], embeddings=[_vec(1.0, 0.0)],
+    )
+
+    results = vector_store.query(query_embedding=_vec(1.0, 0.0), owner_id=owner_id, top_k=1)
+
+    assert results[0]["filename"] is None
+    assert results[0]["content_type"] is None
+
+
+# --- VectorStoreUnavailableError ---
+
+
+def test_add_chunks_wraps_a_chroma_failure_in_vector_store_unavailable_error(vector_store):
+    def _broken_upsert(*args, **kwargs):
+        raise RuntimeError("disk is full")
+
+    vector_store._collection.upsert = _broken_upsert
+
+    with pytest.raises(VectorStoreUnavailableError, match="disk is full"):
+        vector_store.add_chunks(
+            document_id=str(uuid.uuid4()), owner_id=str(uuid.uuid4()),
+            chunks=["text"], embeddings=[_vec(1.0, 0.0)],
+        )
+
+
+def test_query_wraps_a_chroma_failure_in_vector_store_unavailable_error(vector_store):
+    def _broken_query(*args, **kwargs):
+        raise RuntimeError("index corrupted")
+
+    vector_store._collection.query = _broken_query
+
+    with pytest.raises(VectorStoreUnavailableError, match="index corrupted"):
+        vector_store.query(query_embedding=_vec(1.0, 0.0), owner_id=str(uuid.uuid4()), top_k=5)
+
+
+def test_delete_by_document_wraps_a_chroma_failure_in_vector_store_unavailable_error(
+    vector_store,
+):
+    def _broken_delete(*args, **kwargs):
+        raise RuntimeError("permission denied")
+
+    vector_store._collection.delete = _broken_delete
+
+    with pytest.raises(VectorStoreUnavailableError, match="permission denied"):
+        vector_store.delete_by_document(document_id=str(uuid.uuid4()))
 
 
 def test_readding_the_same_document_id_upserts_rather_than_duplicates(vector_store):

@@ -9,8 +9,10 @@ from core.logging import logger
 from core.metrics import INGESTION_DURATION_SECONDS
 from core.storage import Storage
 from core.text_extraction import SUPPORTED_CONTENT_TYPES, clean_text, extract_text
+from core.tokens import estimate_token_count
 from core.vector_store import VectorStore
 from models.document import DocumentStatus
+from repositories.chunk_repository import ChunkRepository
 from repositories.document_repository import DocumentRepository
 
 # Truncated before being stored/returned to a client — an unhandled
@@ -49,6 +51,7 @@ class IngestionService:
         vector_store: VectorStore,
         chunk_size: int,
         chunk_overlap: int,
+        embedding_model_name: str,
     ):
         self.session_factory = session_factory
         self.storage = storage
@@ -56,6 +59,12 @@ class IngestionService:
         self.vector_store = vector_store
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
+        # Recorded onto every DocumentChunk row this run writes (see
+        # _store_chunks) — a separate value from whatever `embedding_model`
+        # itself is, because a Protocol-typed dependency (see
+        # core/embeddings.py) has no obligation to expose its own name;
+        # the caller that built it already knows.
+        self.embedding_model_name = embedding_model_name
 
     async def process_document(self, document_id: uuid.UUID) -> None:
         start_time = time.perf_counter()
@@ -111,6 +120,8 @@ class IngestionService:
                 chunks.extend(page_chunks)
                 page_numbers.extend([page_number] * len(page_chunks))
 
+            embedding_duration = 0.0
+            indexing_duration = 0.0
             if chunks:
                 # EMBEDDING committed as its own transaction, same reasoning
                 # as PROCESSING above — running the actual model is the
@@ -120,19 +131,41 @@ class IngestionService:
                 # worth a client being able to see they're specifically
                 # waiting on, rather than an undifferentiated "processing."
                 await self._set_status(document_id, DocumentStatus.EMBEDDING)
+
+                embedding_start = time.perf_counter()
                 embeddings = self.embedding_model.embed(chunks)
+                embedding_duration = time.perf_counter() - embedding_start
+
+                indexing_start = time.perf_counter()
                 self.vector_store.add_chunks(
                     document_id=str(document.id),
                     owner_id=str(document.owner_id),
                     chunks=chunks,
                     embeddings=embeddings,
                     page_numbers=page_numbers,
+                    filename=document.filename,
+                    content_type=document.content_type,
                 )
+                await self._store_chunks(
+                    document_id=document.id,
+                    owner_id=document.owner_id,
+                    chunks=chunks,
+                )
+                indexing_duration = time.perf_counter() - indexing_start
 
             await self._set_status(document_id, DocumentStatus.READY)
-            INGESTION_DURATION_SECONDS.labels(outcome="success").observe(
-                time.perf_counter() - start_time
+            total_duration = time.perf_counter() - start_time
+            logger.info(
+                "Ingestion complete for document %s (owner %s): %d chunks, "
+                "embedding=%.3fs, indexing=%.3fs, total=%.3fs",
+                document_id,
+                document.owner_id,
+                len(chunks),
+                embedding_duration,
+                indexing_duration,
+                total_duration,
             )
+            INGESTION_DURATION_SECONDS.labels(outcome="success").observe(total_duration)
         except Exception as error:
             # Deliberately catches everything: a corrupt PDF, a storage
             # read failure, an embedding model error — all of them mean
@@ -176,3 +209,37 @@ class IngestionService:
             )
             await session.commit()
             return document
+
+    async def _store_chunks(
+        self,
+        *,
+        document_id: uuid.UUID,
+        owner_id: uuid.UUID,
+        chunks: list[str],
+    ) -> None:
+        """Mirrors `chunks` into Postgres (see repositories/chunk_repository.py)
+        — a separate transaction from _set_status, same reasoning as every
+        other step in this pipeline: this service manages its own
+        transactions throughout, never borrowing one from a caller.
+
+        replace_for_document (not a plain insert) is what makes this
+        idempotent: reprocessing the same document_id always leaves
+        Postgres holding exactly this run's chunks, never a duplicate or
+        stale set.
+        """
+        async with self.session_factory() as session:
+            repository = ChunkRepository(session)
+            await repository.replace_for_document(
+                document_id=document_id,
+                owner_id=owner_id,
+                chunks=[
+                    {
+                        "chunk_index": index,
+                        "text": text,
+                        "token_count": estimate_token_count(text),
+                        "embedding_model": self.embedding_model_name,
+                    }
+                    for index, text in enumerate(chunks)
+                ],
+            )
+            await session.commit()

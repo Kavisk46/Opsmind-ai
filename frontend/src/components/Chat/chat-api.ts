@@ -176,6 +176,25 @@ export function useConversation(conversationId: string | null) {
   });
 }
 
+// PATCH /conversations/{id} — renames a conversation. Backend rejects an
+// empty/whitespace title with 400 (schemas/conversation.py's
+// ConversationRenameRequest.title has no default, unlike create's) —
+// this function doesn't pre-validate that itself, leaving it to the
+// backend as the single source of truth, same as every other write in
+// this API client.
+export async function renameConversation(
+  conversationId: string,
+  title: string,
+  options?: { signal?: AbortSignal }
+): Promise<Conversation> {
+  const conversation = await apiClient.patch<ConversationResponseWire>(
+    `/conversations/${conversationId}`,
+    { title },
+    { signal: options?.signal }
+  );
+  return toConversation(conversation);
+}
+
 // DELETE /conversations/{id} — 204 No Content on success.
 export async function deleteConversation(
   conversationId: string,

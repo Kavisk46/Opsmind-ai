@@ -3,18 +3,24 @@ import shutil
 import tempfile
 
 import pytest
+from fastapi import Depends
 from fastapi.testclient import TestClient
 from sqlalchemy import event
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
 from api.dependencies import (
     get_ai_metrics_service,
+    get_ask_service,
     get_chat_service,
+    get_citation_service,
+    get_context_service,
     get_conversation_service,
     get_document_service,
     get_ingestion_service,
     get_login_rate_limiter,
+    get_query_service,
+    get_retrieval_service,
     get_session_factory,
     get_signup_rate_limiter,
 )
@@ -34,25 +40,37 @@ from models.base import Base
 # table (e.g. User.team_id -> teams) would fail with NoReferencedTableError.
 from models.conversation import Conversation  # noqa: F401
 from models.document import Document  # noqa: F401
+from models.document_chunk import DocumentChunk  # noqa: F401
 from models.message import Message  # noqa: F401
 from models.oauth_account import OAuthAccount  # noqa: F401
 from models.refresh_token import RefreshToken  # noqa: F401
-from models.team import Team  # noqa: F401
 from models.user import User  # noqa: F401
+from models.workspace import Workspace  # noqa: F401
+from models.workspace_member import WorkspaceMember  # noqa: F401
+from repositories.chunk_repository import ChunkRepository
 from repositories.conversation_repository import ConversationRepository
 from repositories.document_repository import DocumentRepository
 from repositories.message_repository import MessageRepository
 from repositories.user_repository import UserRepository
+from repositories.workspace_member_repository import WorkspaceMemberRepository
+from repositories.workspace_repository import WorkspaceRepository
 from services.ai_metrics_service import AIMetricsService
+from services.ask_service import AskService
 from services.chat_service import ChatService
+from services.citation_service import CitationService
+from services.context_service import ContextService
 from services.conversation_service import ConversationService
 from services.document_service import DocumentService
 from services.ingestion_service import IngestionService
 from services.orchestrator import AIOrchestrator
+from services.planner import Planner
 from services.prompt_builder import PromptBuilder
+from services.query_service import QueryService
+from services.reranking_service import WeightedReranker
 from services.retrieval_service import RetrievalService
 from services.tool_registry import ToolRegistry
 from services.tools import DocumentMetadataTool, RAGRetrievalTool
+from services.workspace_service import WorkspaceService
 
 
 class FakeEmbeddingModel:
@@ -179,6 +197,7 @@ def client():
                     storage=storage,
                     max_size_bytes=settings.max_upload_size_bytes,
                     vector_store=vector_store,
+                    chunk_repository=ChunkRepository(session),
                 )
                 await session.commit()
             except Exception:
@@ -193,6 +212,7 @@ def client():
             vector_store=vector_store,
             chunk_size=1000,
             chunk_overlap=200,
+            embedding_model_name="fake-embedding-model",
         )
 
     async def override_get_conversation_service():
@@ -208,6 +228,20 @@ def client():
                 await session.rollback()
                 raise
 
+    def _build_retrieval_service(session) -> RetrievalService:
+        # Shared by override_get_chat_service and override_get_retrieval_service
+        # below — same fake embedding model/real (temp-dir) vector store
+        # every other overridden service in this fixture already uses,
+        # just wired into RetrievalService's fuller (Retrieval Engine
+        # phase) constructor.
+        return RetrievalService(
+            embedding_model=embedding_model,
+            vector_store=vector_store,
+            chunk_repository=ChunkRepository(session),
+            document_repository=DocumentRepository(session),
+            reranker=WeightedReranker(vector_weight=0.7, keyword_weight=0.3),
+        )
+
     async def override_get_chat_service():
         # Matches override_get_document_service's pattern above: manages
         # its own session from session_factory directly rather than
@@ -219,20 +253,25 @@ def client():
         async with session_factory() as session:
             try:
                 document_repository = DocumentRepository(session)
-                retrieval_service = RetrievalService(
-                    embedding_model=embedding_model, vector_store=vector_store
-                )
+                user_repository = UserRepository(session)
+                retrieval_service = _build_retrieval_service(session)
 
                 tool_registry = ToolRegistry()
                 tool_registry.register(
                     RAGRetrievalTool(
                         retrieval_service=retrieval_service,
-                        document_repository=document_repository,
+                        query_service=QueryService(),
+                        context_service=ContextService(),
+                        citation_service=CitationService(),
                         top_k=5,
+                        max_returned_chunks=10,
+                        max_context_tokens=2000,
                     )
                 )
                 tool_registry.register(
-                    DocumentMetadataTool(document_repository=document_repository)
+                    DocumentMetadataTool(
+                        document_repository=document_repository, user_repository=user_repository
+                    )
                 )
 
                 orchestrator = AIOrchestrator(
@@ -280,11 +319,50 @@ def client():
     async def override_get_ai_metrics_service() -> AIMetricsService:
         return ai_metrics_service
 
+    # db: AsyncSession = Depends(get_db) here resolves to override_get_db
+    # above (already registered in app.dependency_overrides) — FastAPI
+    # applies overrides throughout the whole dependency graph, including
+    # inside another override's own Depends(), so this gets the same
+    # per-request SQLite session every other overridden service does,
+    # with no need to open one manually via session_factory().
+    async def override_get_retrieval_service(
+        db: AsyncSession = Depends(get_db),
+    ) -> RetrievalService:
+        return _build_retrieval_service(db)
+
+    async def override_get_query_service() -> QueryService:
+        return QueryService()
+
+    async def override_get_context_service() -> ContextService:
+        return ContextService()
+
+    async def override_get_citation_service() -> CitationService:
+        return CitationService()
+
+    async def override_get_ask_service(
+        db: AsyncSession = Depends(get_db),
+    ) -> AskService:
+        return AskService(
+            Planner(),
+            _build_retrieval_service(db),
+            ContextService(),
+            PromptBuilder(chat_prompt_version="ask_v1"),
+            CitationService(),
+            fake_llm,
+            max_context_tokens=2000,
+            max_returned_chunks=10,
+        )
+
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_document_service] = override_get_document_service
     app.dependency_overrides[get_ingestion_service] = override_get_ingestion_service
     app.dependency_overrides[get_conversation_service] = override_get_conversation_service
     app.dependency_overrides[get_chat_service] = override_get_chat_service
+    app.dependency_overrides[get_ask_service] = override_get_ask_service
+    app.dependency_overrides[get_retrieval_service] = override_get_retrieval_service
+    app.dependency_overrides[get_query_service] = override_get_query_service
+    app.dependency_overrides[get_context_service] = override_get_context_service
+    app.dependency_overrides[get_citation_service] = override_get_citation_service
     app.dependency_overrides[get_login_rate_limiter] = override_get_login_rate_limiter
     app.dependency_overrides[get_signup_rate_limiter] = override_get_signup_rate_limiter
     app.dependency_overrides[get_session_factory] = override_get_session_factory
@@ -440,6 +518,11 @@ def document_repository(db_session):
 
 
 @pytest.fixture()
+def chunk_repository(db_session):
+    return ChunkRepository(db_session)
+
+
+@pytest.fixture()
 def document_service(db_session, tmp_path):
     """A real DocumentService — real SQLite session, real LocalStorage
     writing to a pytest-managed tmp_path, real (embedded) VectorStore —
@@ -455,6 +538,7 @@ def document_service(db_session, tmp_path):
         storage=LocalStorage(str(tmp_path / "uploads")),
         max_size_bytes=settings.max_upload_size_bytes,
         vector_store=VectorStore(str(tmp_path / "chroma")),
+        chunk_repository=ChunkRepository(db_session),
     )
 
 
@@ -466,3 +550,18 @@ def conversation_repository(db_session):
 @pytest.fixture()
 def message_repository(db_session):
     return MessageRepository(db_session)
+
+
+@pytest.fixture()
+def workspace_repository(db_session):
+    return WorkspaceRepository(db_session)
+
+
+@pytest.fixture()
+def workspace_member_repository(db_session):
+    return WorkspaceMemberRepository(db_session)
+
+
+@pytest.fixture()
+def workspace_service(db_session):
+    return WorkspaceService(db_session)

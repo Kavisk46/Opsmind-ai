@@ -170,6 +170,28 @@ def test_orchestrator_executes_routed_tool_and_builds_prompt_from_its_output():
     assert "some context" in llm.last_prompt
 
 
+def test_orchestrator_populates_provider_model_and_token_counts_on_success():
+    # These fields (added this phase) are what lets ChatService persist
+    # provider/model/token usage as the assistant message's metadata
+    # (see ConversationService.append_message) without reaching into
+    # AIOrchestrator's own attributes directly.
+    registry = ToolRegistry()
+    registry.register(
+        _StubTool(
+            "rag_retrieval",
+            result=ToolResult(tool_name="rag_retrieval", success=True, output_text="ctx"),
+        )
+    )
+    orchestrator = _make_orchestrator(registry, _StubPromptBuilder(), _StubLLM())
+
+    result = asyncio.run(orchestrator.handle(question="anything", owner_id=uuid.uuid4()))
+
+    assert result.provider == "test-provider"
+    assert result.model == "test-model"
+    assert result.prompt_tokens == 10
+    assert result.completion_tokens == 5
+
+
 def test_orchestrator_falls_back_gracefully_when_tool_raises():
     registry = ToolRegistry()
     tool = _StubTool("rag_retrieval", raises=RuntimeError("boom"))

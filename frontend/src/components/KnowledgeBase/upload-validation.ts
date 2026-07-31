@@ -1,13 +1,21 @@
-const MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024;
-const MAX_FILE_SIZE_LABEL = "20 MB";
+const MAX_FILE_SIZE_BYTES = 25 * 1024 * 1024;
+const MAX_FILE_SIZE_LABEL = "25 MB";
 
-// Matches backend/core/text_extraction.py's SUPPORTED_CONTENT_TYPES
-// exactly (text/plain, text/markdown, application/pdf) — verified
-// directly against that file, not guessed. A much broader mock list
-// (.doc, .xls, .png, ...) used to live here; uploading any of those would
-// pass this check but then fail on the backend with a 415, so this list
-// is corrected to match what the real upload endpoint actually accepts.
-const ACCEPTED_EXTENSIONS = [".txt", ".md", ".pdf"];
+// Matches services/document_service.py's ACCEPTED_UPLOAD_CONTENT_TYPES
+// exactly — verified directly against that file, not guessed. Kept as
+// extensions here (not MIME types) since that's what a file input's
+// `accept` attribute and a client-side filename check both work with;
+// the backend is what actually validates content_type.
+const ACCEPTED_EXTENSIONS = [
+  ".txt",
+  ".md",
+  ".pdf",
+  ".docx",
+  ".csv",
+  ".png",
+  ".jpg",
+  ".jpeg",
+];
 
 export const UPLOAD_ACCEPT_ATTRIBUTE = ACCEPTED_EXTENSIONS.join(",");
 

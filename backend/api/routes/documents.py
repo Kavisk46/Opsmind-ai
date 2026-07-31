@@ -11,8 +11,15 @@ from fastapi import (
 )
 from fastapi.responses import Response
 
-from api.dependencies import get_current_user, get_document_service, get_ingestion_service
+from api.dependencies import (
+    get_current_user,
+    get_current_workspace,
+    get_document_service,
+    get_ingestion_service,
+    require_workspace_permission,
+)
 from models.user import User
+from models.workspace import Workspace
 from repositories.document_repository import SortOption
 from schemas.document import DocumentResponse, DocumentStatsResponse, DocumentStatusResponse
 from services.document_service import (
@@ -24,6 +31,7 @@ from services.document_service import (
     UnsupportedFileTypeError,
 )
 from services.ingestion_service import IngestionService
+from services.workspace_service import WorkspacePermission
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
@@ -33,6 +41,9 @@ async def upload_document(
     file: UploadFile,
     background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
+    current_workspace: Workspace = Depends(
+        require_workspace_permission(WorkspacePermission.UPLOAD)
+    ),
     service: DocumentService = Depends(get_document_service),
     ingestion_service: IngestionService = Depends(get_ingestion_service),
 ):
@@ -43,6 +54,7 @@ async def upload_document(
     try:
         document = await service.upload_document(
             owner_id=current_user.id,
+            workspace_id=current_workspace.id,
             filename=file.filename or "untitled",
             content_type=file.content_type or "application/octet-stream",
             data=data,
@@ -96,10 +108,10 @@ async def upload_document(
 
 @router.get("", response_model=list[DocumentResponse])
 async def list_documents(
-    current_user: User = Depends(get_current_user),
+    current_workspace: Workspace = Depends(get_current_workspace),
     service: DocumentService = Depends(get_document_service),
 ):
-    return await service.list_documents(owner_id=current_user.id)
+    return await service.list_documents(workspace_id=current_workspace.id)
 
 
 # Declared BEFORE /{document_id} deliberately — FastAPI matches routes in
@@ -113,31 +125,31 @@ async def search_documents(
     q: str | None = Query(default=None, description="Matched against filename, case-insensitive."),
     content_type: str | None = Query(default=None, description="Exact MIME type filter."),
     sort: SortOption = Query(default="newest"),
-    current_user: User = Depends(get_current_user),
+    current_workspace: Workspace = Depends(get_current_workspace),
     service: DocumentService = Depends(get_document_service),
 ):
     return await service.search_documents(
-        owner_id=current_user.id, query=q, content_type=content_type, sort=sort
+        workspace_id=current_workspace.id, query=q, content_type=content_type, sort=sort
     )
 
 
 @router.get("/stats", response_model=DocumentStatsResponse)
 async def get_document_stats(
-    current_user: User = Depends(get_current_user),
+    current_workspace: Workspace = Depends(get_current_workspace),
     service: DocumentService = Depends(get_document_service),
 ):
-    return await service.get_stats(owner_id=current_user.id)
+    return await service.get_stats(workspace_id=current_workspace.id)
 
 
 @router.get("/download/{document_id}")
 async def download_document(
     document_id: uuid.UUID,
-    current_user: User = Depends(get_current_user),
+    current_workspace: Workspace = Depends(get_current_workspace),
     service: DocumentService = Depends(get_document_service),
 ):
     try:
         document, data = await service.download_document(
-            owner_id=current_user.id, document_id=document_id
+            workspace_id=current_workspace.id, document_id=document_id
         )
     except DocumentNotFoundError as error:
         raise HTTPException(
@@ -157,12 +169,12 @@ async def download_document(
 @router.get("/{document_id}", response_model=DocumentResponse)
 async def get_document(
     document_id: uuid.UUID,
-    current_user: User = Depends(get_current_user),
+    current_workspace: Workspace = Depends(get_current_workspace),
     service: DocumentService = Depends(get_document_service),
 ):
     try:
         return await service.get_document(
-            owner_id=current_user.id, document_id=document_id
+            workspace_id=current_workspace.id, document_id=document_id
         )
     except DocumentNotFoundError as error:
         raise HTTPException(
@@ -173,7 +185,7 @@ async def get_document(
 @router.get("/{document_id}/status", response_model=DocumentStatusResponse)
 async def get_document_status(
     document_id: uuid.UUID,
-    current_user: User = Depends(get_current_user),
+    current_workspace: Workspace = Depends(get_current_workspace),
     service: DocumentService = Depends(get_document_service),
 ):
     # A route of its own, not just a field on GET /documents/{id} — this
@@ -183,7 +195,7 @@ async def get_document_status(
     # for why that's a deliberately smaller payload).
     try:
         return await service.get_document(
-            owner_id=current_user.id, document_id=document_id
+            workspace_id=current_workspace.id, document_id=document_id
         )
     except DocumentNotFoundError as error:
         raise HTTPException(
@@ -194,16 +206,18 @@ async def get_document_status(
 @router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_document(
     document_id: uuid.UUID,
-    current_user: User = Depends(get_current_user),
+    current_workspace: Workspace = Depends(
+        require_workspace_permission(WorkspacePermission.DELETE)
+    ),
     service: DocumentService = Depends(get_document_service),
 ):
     # 204: success, deliberately no body — there's nothing left to return
     # once a resource is gone. Same DocumentNotFoundError -> 404 mapping as
-    # every other document route, so deleting someone else's document (or
-    # a nonexistent ID) is indistinguishable from either case.
+    # every other document route, so deleting a document outside this
+    # workspace (or a nonexistent ID) is indistinguishable from either case.
     try:
         await service.delete_document(
-            owner_id=current_user.id, document_id=document_id
+            workspace_id=current_workspace.id, document_id=document_id
         )
     except DocumentNotFoundError as error:
         raise HTTPException(

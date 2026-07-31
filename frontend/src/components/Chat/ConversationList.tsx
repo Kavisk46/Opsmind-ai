@@ -16,6 +16,7 @@ interface ConversationListProps {
   onSelectConversation: (id: string) => void;
   onNewChat: () => void;
   onDeleteConversation: (id: string) => void;
+  onRenameConversation: (id: string, title: string) => void;
   // Provided only by the mobile modal instance — its presence is what
   // turns on the close button, Escape-to-close, and body-scroll lock.
   onClose?: () => void;
@@ -27,6 +28,7 @@ export function ConversationList({
   onSelectConversation,
   onNewChat,
   onDeleteConversation,
+  onRenameConversation,
   onClose,
 }: ConversationListProps) {
   const [query, setQuery] = useState("");
@@ -120,6 +122,9 @@ export function ConversationList({
               isActive={conversation.id === activeConversationId}
               onSelect={() => onSelectConversation(conversation.id)}
               onDelete={() => onDeleteConversation(conversation.id)}
+              onRename={(newTitle) =>
+                onRenameConversation(conversation.id, newTitle)
+              }
             />
           ))
         )}

@@ -1,6 +1,6 @@
 from collections.abc import AsyncIterator
 
-from services.llm.protocol import LLMResponse
+from services.llm.protocol import LLMResponse, ProviderHealth
 
 
 class OllamaProvider:
@@ -25,6 +25,16 @@ class OllamaProvider:
     @property
     def is_loaded(self) -> bool:
         return False
+
+    @property
+    def model_name(self) -> str:
+        return self._model
+
+    def health(self) -> ProviderHealth:
+        return ProviderHealth(
+            is_healthy=False,
+            detail="OllamaProvider is a placeholder and not yet implemented.",
+        )
 
     async def generate(self, prompt: str) -> LLMResponse:
         raise NotImplementedError(

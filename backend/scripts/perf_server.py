@@ -40,16 +40,21 @@ import argparse
 import tempfile
 
 import uvicorn
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from fastapi import Depends
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import AsyncAdaptedQueuePool
 
 from api.dependencies import (
     get_ai_metrics_service,
     get_chat_service,
+    get_citation_service,
+    get_context_service,
     get_conversation_service,
     get_document_service,
     get_ingestion_service,
     get_login_rate_limiter,
+    get_query_service,
+    get_retrieval_service,
     get_session_factory,
 )
 from core.config import settings
@@ -65,19 +70,27 @@ from models.base import Base
 # comments on this exact requirement.
 from models.conversation import Conversation  # noqa: F401
 from models.document import Document  # noqa: F401
+from models.document_chunk import DocumentChunk  # noqa: F401
 from models.message import Message  # noqa: F401
-from models.team import Team  # noqa: F401
 from models.user import User  # noqa: F401
+from models.workspace import Workspace  # noqa: F401
+from models.workspace_member import WorkspaceMember  # noqa: F401
+from repositories.chunk_repository import ChunkRepository
 from repositories.conversation_repository import ConversationRepository
 from repositories.document_repository import DocumentRepository
 from repositories.message_repository import MessageRepository
+from repositories.user_repository import UserRepository
 from services.ai_metrics_service import AIMetricsService
 from services.chat_service import ChatService
+from services.citation_service import CitationService
+from services.context_service import ContextService
 from services.conversation_service import ConversationService
 from services.document_service import DocumentService
 from services.ingestion_service import IngestionService
 from services.orchestrator import AIOrchestrator
 from services.prompt_builder import PromptBuilder
+from services.query_service import QueryService
+from services.reranking_service import WeightedReranker
 from services.retrieval_service import RetrievalService
 from services.tool_registry import ToolRegistry
 from services.tools import DocumentMetadataTool, RAGRetrievalTool
@@ -150,6 +163,7 @@ def build_app(db_path: str, storage_dir: str, chroma_dir: str):
                     session, storage=storage,
                     max_size_bytes=settings.max_upload_size_bytes,
                     vector_store=vector_store,
+                    chunk_repository=ChunkRepository(session),
                 )
                 await session.commit()
             except Exception:
@@ -161,6 +175,7 @@ def build_app(db_path: str, storage_dir: str, chroma_dir: str):
             session_factory=session_factory, storage=storage,
             embedding_model=embedding_model, vector_store=vector_store,
             chunk_size=settings.chunk_size_chars, chunk_overlap=settings.chunk_overlap_chars,
+            embedding_model_name=settings.embedding_model_name,
         )
 
     async def override_get_conversation_service():
@@ -175,23 +190,54 @@ def build_app(db_path: str, storage_dir: str, chroma_dir: str):
                 await session.rollback()
                 raise
 
+    def build_retrieval_service(session) -> RetrievalService:
+        return RetrievalService(
+            embedding_model=embedding_model,
+            vector_store=vector_store,
+            chunk_repository=ChunkRepository(session),
+            document_repository=DocumentRepository(session),
+            reranker=WeightedReranker(
+                vector_weight=settings.retrieval_vector_weight,
+                keyword_weight=settings.retrieval_keyword_weight,
+            ),
+        )
+
+    async def override_get_retrieval_service(
+        session: AsyncSession = Depends(get_db),
+    ) -> RetrievalService:
+        return build_retrieval_service(session)
+
+    async def override_get_query_service() -> QueryService:
+        return QueryService()
+
+    async def override_get_context_service() -> ContextService:
+        return ContextService()
+
+    async def override_get_citation_service() -> CitationService:
+        return CitationService()
+
     async def override_get_chat_service():
         async with session_factory() as session:
             try:
                 document_repository = DocumentRepository(session)
-                retrieval_service = RetrievalService(
-                    embedding_model=embedding_model, vector_store=vector_store
-                )
+                user_repository = UserRepository(session)
+                retrieval_service = build_retrieval_service(session)
                 tool_registry = ToolRegistry()
                 tool_registry.register(
                     RAGRetrievalTool(
                         retrieval_service=retrieval_service,
-                        document_repository=document_repository,
+                        query_service=QueryService(),
+                        context_service=ContextService(),
+                        citation_service=CitationService(),
                         top_k=settings.retrieval_top_k,
+                        max_returned_chunks=settings.retrieval_max_returned_chunks,
+                        max_context_tokens=settings.retrieval_max_context_tokens,
                     )
                 )
                 tool_registry.register(
-                    DocumentMetadataTool(document_repository=document_repository)
+                    DocumentMetadataTool(
+                        document_repository=document_repository, user_repository=user_repository
+                    )
                 )
                 orchestrator = AIOrchestrator(
                     tool_registry=tool_registry, prompt_builder=prompt_builder, llm=llm,
@@ -221,6 +267,10 @@ def build_app(db_path: str, storage_dir: str, chroma_dir: str):
     app.dependency_overrides[get_ingestion_service] = override_get_ingestion_service
     app.dependency_overrides[get_conversation_service] = override_get_conversation_service
     app.dependency_overrides[get_chat_service] = override_get_chat_service
+    app.dependency_overrides[get_retrieval_service] = override_get_retrieval_service
+    app.dependency_overrides[get_query_service] = override_get_query_service
+    app.dependency_overrides[get_context_service] = override_get_context_service
+    app.dependency_overrides[get_citation_service] = override_get_citation_service
     app.dependency_overrides[get_login_rate_limiter] = override_get_login_rate_limiter
     app.dependency_overrides[get_session_factory] = override_get_session_factory
     app.dependency_overrides[get_ai_metrics_service] = override_get_ai_metrics_service

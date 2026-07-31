@@ -1,6 +1,10 @@
+"use client";
+
 import { FileText, MoreHorizontal } from "lucide-react";
 import Link from "next/link";
 
+import { useDocumentStats } from "@/components/KnowledgeBase/documents-api";
+import { useAuth } from "@/components/Providers/AuthProvider";
 import { Badge, type BadgeProps } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import {
@@ -19,26 +23,28 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { formatDate } from "@/lib/format";
-import {
-  recentDocuments,
-  type DocumentStatus,
-} from "@/lib/mock-data/mockDashboard";
+import { getFriendlyErrorMessage, normalizeError } from "@/lib/api";
+import { formatDate, formatFileSize } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 import { FadeIn } from "./FadeIn";
 
-const STATUS_VARIANT: Record<DocumentStatus, BadgeProps["variant"]> = {
-  ready: "success",
-  embedding: "info",
+// Real backend document statuses (models/document.py's DocumentStatus
+// enum) — "uploaded" was missing from this map before real data existed
+// since the mock fixture never produced that value.
+const STATUS_VARIANT: Record<string, BadgeProps["variant"]> = {
+  uploaded: "info",
   processing: "warning",
+  embedding: "info",
+  ready: "success",
   failed: "destructive",
 };
 
-const STATUS_LABEL: Record<DocumentStatus, string> = {
-  ready: "Ready",
-  embedding: "Embedding",
+const STATUS_LABEL: Record<string, string> = {
+  uploaded: "Uploaded",
   processing: "Processing",
+  embedding: "Embedding",
+  ready: "Ready",
   failed: "Failed",
 };
 
@@ -47,6 +53,10 @@ interface RecentDocumentsProps {
 }
 
 export function RecentDocuments({ className }: RecentDocumentsProps) {
+  const { user } = useAuth();
+  const statsQuery = useDocumentStats();
+  const recentUploads = statsQuery.data?.recentUploads ?? [];
+
   return (
     <FadeIn className={className}>
       <Card className="flex h-full flex-col">
@@ -63,7 +73,19 @@ export function RecentDocuments({ className }: RecentDocumentsProps) {
           </Link>
         </CardHeader>
 
-        {recentDocuments.length === 0 ? (
+        {statsQuery.isPending ? (
+          <p className="px-4 pb-6 text-sm text-muted-foreground sm:px-6">
+            Loading documents…
+          </p>
+        ) : statsQuery.error ? (
+          <div className="px-4 pb-6 sm:px-6">
+            <EmptyState
+              icon={FileText}
+              title="Couldn't load documents"
+              description={getFriendlyErrorMessage(normalizeError(statsQuery.error))}
+            />
+          </div>
+        ) : recentUploads.length === 0 ? (
           <div className="px-4 pb-6 sm:px-6">
             <EmptyState
               icon={FileText}
@@ -85,7 +107,7 @@ export function RecentDocuments({ className }: RecentDocumentsProps) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {recentDocuments.map((doc) => (
+              {recentUploads.map((doc) => (
                 <TableRow key={doc.id}>
                   <TableCell className="max-w-64">
                     <div className="flex items-center gap-2.5">
@@ -93,34 +115,34 @@ export function RecentDocuments({ className }: RecentDocumentsProps) {
                         className="h-4 w-4 shrink-0 text-muted-foreground"
                         aria-hidden="true"
                       />
-                      <span className="truncate font-medium">{doc.name}</span>
+                      <span className="truncate font-medium">{doc.filename}</span>
                     </div>
                   </TableCell>
                   <TableCell className="whitespace-nowrap text-muted-foreground">
-                    {doc.owner}
+                    {user?.name ?? "You"}
                   </TableCell>
                   <TableCell>
-                    <Badge variant={STATUS_VARIANT[doc.status]}>
-                      {STATUS_LABEL[doc.status]}
+                    <Badge variant={STATUS_VARIANT[doc.status] ?? "muted"}>
+                      {STATUS_LABEL[doc.status] ?? doc.status}
                     </Badge>
                   </TableCell>
                   <TableCell className="whitespace-nowrap text-muted-foreground">
-                    {doc.sizeLabel}
+                    {formatFileSize(doc.sizeBytes)}
                   </TableCell>
                   <TableCell className="whitespace-nowrap text-muted-foreground">
-                    {formatDate(doc.uploadedAt)}
+                    {formatDate(doc.createdAt)}
                   </TableCell>
                   <TableCell className="text-right">
-                    <button
-                      type="button"
+                    <Link
+                      href="/documents"
                       className={cn(
                         buttonVariants({ variant: "ghost", size: "icon" }),
                         "h-8 w-8"
                       )}
-                      aria-label={`Actions for ${doc.name}`}
+                      aria-label={`Open ${doc.filename} in Documents`}
                     >
                       <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
-                    </button>
+                    </Link>
                   </TableCell>
                 </TableRow>
               ))}

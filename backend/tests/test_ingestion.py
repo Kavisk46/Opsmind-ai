@@ -4,8 +4,17 @@ import io
 import uuid
 
 from core.storage import LocalStorage
+from repositories.chunk_repository import ChunkRepository
 from repositories.document_repository import DocumentRepository
 from services.ingestion_service import IngestionService
+
+
+def _list_chunks(client, document_id: uuid.UUID):
+    async def _list():
+        async with client.session_factory() as session:
+            return await ChunkRepository(session).list_by_document(document_id)
+
+    return asyncio.run(_list())
 
 
 def _auth_headers(client, email: str = "ingest-user@example.com") -> dict:
@@ -87,6 +96,68 @@ def test_markdown_upload_is_extracted_and_becomes_ready(client):
     assert response.json()["status"] == "ready"
 
 
+def _make_docx_bytes(paragraphs: list[str]) -> bytes:
+    from docx import Document as DocxDocument
+
+    document = DocxDocument()
+    for paragraph in paragraphs:
+        document.add_paragraph(paragraph)
+    buffer = io.BytesIO()
+    document.save(buffer)
+    return buffer.getvalue()
+
+
+def test_docx_upload_is_extracted_and_becomes_ready(client):
+    headers = _auth_headers(client, email="ingest-user-docx@example.com")
+    docx_bytes = _make_docx_bytes(
+        ["Quarterly Report", "The deployment pipeline stalled twice last week."]
+    )
+
+    upload = client.post(
+        "/documents",
+        headers=headers,
+        files={
+            "file": (
+                "report.docx",
+                io.BytesIO(docx_bytes),
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            )
+        },
+    )
+    document_id = upload.json()["id"]
+
+    response = client.get(f"/documents/{document_id}", headers=headers)
+    assert response.json()["status"] == "ready"
+
+    chunks = _list_chunks(client, uuid.UUID(document_id))
+    assert len(chunks) == 1
+    assert "deployment pipeline stalled" in chunks[0].text
+
+
+def test_csv_upload_is_extracted_and_becomes_ready(client):
+    headers = _auth_headers(client, email="ingest-user-csv@example.com")
+    csv_bytes = (
+        b"name,department,note\r\n"
+        b"Alice,Engineering,deployment pipeline stalled twice last week\r\n"
+        b"Bob,Sales,no incidents reported\r\n"
+    )
+
+    upload = client.post(
+        "/documents",
+        headers=headers,
+        files={"file": ("incidents.csv", io.BytesIO(csv_bytes), "text/csv")},
+    )
+    document_id = upload.json()["id"]
+
+    response = client.get(f"/documents/{document_id}", headers=headers)
+    assert response.json()["status"] == "ready"
+
+    chunks = _list_chunks(client, uuid.UUID(document_id))
+    assert len(chunks) == 1
+    assert "name: Alice" in chunks[0].text
+    assert "deployment pipeline stalled twice last week" in chunks[0].text
+
+
 def test_embedding_status_is_visible_while_embedding_runs(client):
     # TestClient runs BackgroundTasks synchronously, so by the time
     # client.post() returns, the document has ALREADY passed through
@@ -135,6 +206,7 @@ def test_embedding_status_is_visible_while_embedding_runs(client):
         vector_store=client.vector_store,
         chunk_size=1000,
         chunk_overlap=200,
+        embedding_model_name="status-checking-model",
     )
     asyncio.run(service.process_document(document_id))
 
@@ -219,3 +291,87 @@ def test_deleting_document_removes_its_vectors(client):
 
     count_after_delete = client.vector_store.count()
     assert count_after_delete == 0
+
+
+def test_processed_document_chunks_are_mirrored_into_postgres(client):
+    # The one genuinely new deliverable this sprint added: chunks/text/
+    # token_count/embedding_model queryable directly from Postgres, not
+    # just discoverable by querying ChromaDB.
+    headers = _auth_headers(client, email="ingest-chunk-mirror@example.com")
+    upload = client.post(
+        "/documents",
+        headers=headers,
+        files={
+            "file": (
+                "notes.txt",
+                io.BytesIO(b"a" * 2500),  # long enough to produce multiple chunks
+                "text/plain",
+            )
+        },
+    )
+    document_id = uuid.UUID(upload.json()["id"])
+
+    chunks = _list_chunks(client, document_id)
+
+    assert len(chunks) > 1
+    assert [c.chunk_index for c in chunks] == list(range(len(chunks)))
+    assert all(c.document_id == document_id for c in chunks)
+    assert all(c.token_count > 0 for c in chunks)
+    assert all(c.embedding_model for c in chunks)
+
+
+def test_reprocessing_a_document_does_not_duplicate_chunk_rows(client):
+    # Proves ChunkRepository.replace_for_document actually makes ingestion
+    # idempotent at the Postgres layer: running process_document a second
+    # time for the same document must leave the same chunk count, never
+    # accumulate a second copy.
+    headers = _auth_headers(client, email="ingest-chunk-idempotent@example.com")
+    upload = client.post(
+        "/documents",
+        headers=headers,
+        files={"file": ("notes.txt", io.BytesIO(b"some content to chunk"), "text/plain")},
+    )
+    document_id = uuid.UUID(upload.json()["id"])
+
+    chunks_after_first_run = _list_chunks(client, document_id)
+    assert len(chunks_after_first_run) > 0
+
+    # The fixture's own fake embedding model isn't exposed on `client`, but
+    # any deterministic fake works here — re-running ingestion end to end
+    # is what's under test, not which vectors it produces.
+    class _FakeEmbeddingModel:
+        def embed(self, texts):
+            return [[1.0] * 8 for _ in texts]
+
+    service = IngestionService(
+        session_factory=client.session_factory,
+        storage=LocalStorage(client.storage_dir),
+        embedding_model=_FakeEmbeddingModel(),
+        vector_store=client.vector_store,
+        chunk_size=1000,
+        chunk_overlap=200,
+        embedding_model_name="fake-embedding-model",
+    )
+    asyncio.run(service.process_document(document_id))
+
+    chunks_after_second_run = _list_chunks(client, document_id)
+    assert len(chunks_after_second_run) == len(chunks_after_first_run)
+    assert [c.text for c in chunks_after_second_run] == [
+        c.text for c in chunks_after_first_run
+    ]
+
+
+def test_deleting_document_removes_its_chunk_rows(client):
+    headers = _auth_headers(client, email="ingest-chunk-delete@example.com")
+    upload = client.post(
+        "/documents",
+        headers=headers,
+        files={"file": ("notes.txt", io.BytesIO(b"a" * 2500), "text/plain")},
+    )
+    document_id = uuid.UUID(upload.json()["id"])
+
+    assert len(_list_chunks(client, document_id)) > 0
+
+    client.delete(f"/documents/{document_id}", headers=headers)
+
+    assert _list_chunks(client, document_id) == []

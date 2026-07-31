@@ -1,3 +1,4 @@
+import { ClipboardButton } from "@/components/Clipboard";
 import { MarkdownRenderer } from "@/components/Markdown";
 import { formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -66,16 +67,30 @@ export function MessageBubble({
           )}
         </div>
         {!isStreaming && citations && citations.length > 0 && (
-          <p className="mt-1 max-w-full text-xs text-muted-foreground">
-            Sources:{" "}
-            {citations
-              .map((citation) =>
-                citation.pageNumber !== null
-                  ? `${citation.documentName} (p.${citation.pageNumber})`
-                  : citation.documentName
-              )
-              .join(", ")}
-          </p>
+          <div className="mt-1 flex max-w-full items-start gap-1 text-xs text-muted-foreground">
+            <p className="min-w-0">
+              Sources:{" "}
+              {citations
+                .map((citation) =>
+                  citation.pageNumber !== null
+                    ? `${citation.documentName} (p.${citation.pageNumber})`
+                    : citation.documentName
+                )
+                .join(", ")}
+            </p>
+            <ClipboardButton
+              text={citations
+                .map((citation, index) =>
+                  citation.pageNumber !== null
+                    ? `${index + 1}. ${citation.documentName} (p. ${citation.pageNumber})`
+                    : `${index + 1}. ${citation.documentName}`
+                )
+                .join("\n")}
+              ariaLabel="Copy sources"
+              successMessage="Sources copied to clipboard"
+              className="h-5 w-5 shrink-0"
+            />
+          </div>
         )}
         {showTimestamp && (
           <div

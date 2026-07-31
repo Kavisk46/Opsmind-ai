@@ -9,6 +9,7 @@ from core.database import get_db
 from core.logging import logger
 from core.oauth import oauth
 from services.auth_service import AuthService
+from services.workspace_service import WorkspaceService
 
 router = APIRouter(prefix="/auth", tags=["oauth"])
 
@@ -156,6 +157,11 @@ async def oauth_callback(
         email=email,
         name=name,
     )
+    # Same reasoning as the password-signup route (api/routes/users.py) —
+    # a brand-new OAuth user needs a workspace to operate in too. Safe to
+    # call for a RETURNING oauth user as well (ensure_personal_workspace
+    # is a no-op once a default workspace already exists).
+    await WorkspaceService(db).ensure_personal_workspace(user.id, user.name)
     tokens = await service.issue_token_pair(user.id)
 
     redirect = RedirectResponse(settings.frontend_url)

@@ -1,11 +1,12 @@
 "use client";
 
-import { Star } from "lucide-react";
+import { Download, Star, Trash2 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { FOCUS_RING_CLASS, cn } from "@/lib/utils";
 
 import { DocumentMeta } from "./DocumentMeta";
+import { downloadDocument } from "./documents-api";
 import { getFileTypeConfig } from "./file-type";
 import type { Document } from "./types";
 
@@ -16,11 +17,12 @@ interface DocumentCardProps {
   isFavorite: boolean;
   onOpen: () => void;
   onToggleFavorite: () => void;
+  onDelete: () => void;
 }
 
-// Two sibling buttons rather than one big card-button with a nested
-// favorite button — interactive content can't nest inside a <button> in
-// valid HTML, so the favorite toggle is a separately-positioned sibling.
+// Sibling buttons rather than one big card-button with nested actions —
+// interactive content can't nest inside a <button> in valid HTML, so the
+// favorite/download/delete controls are separately-positioned siblings.
 export function DocumentCard({
   document,
   categoryName,
@@ -28,6 +30,7 @@ export function DocumentCard({
   isFavorite,
   onOpen,
   onToggleFavorite,
+  onDelete,
 }: DocumentCardProps) {
   const { icon: FileTypeIcon } = getFileTypeConfig(document.fileType);
 
@@ -41,7 +44,7 @@ export function DocumentCard({
           FOCUS_RING_CLASS
         )}
       >
-        <div className="flex items-start gap-3 pr-8">
+        <div className="flex items-start gap-3 pr-20">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-accent text-accent-foreground">
             <FileTypeIcon className="h-5 w-5" aria-hidden="true" />
           </div>
@@ -74,22 +77,46 @@ export function DocumentCard({
         <DocumentMeta document={document} className="mt-auto pt-1" />
       </button>
 
-      <button
-        type="button"
-        onClick={onToggleFavorite}
-        aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
-        aria-pressed={isFavorite}
-        className={cn(
-          "absolute top-3 right-3 inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground",
-          FOCUS_RING_CLASS,
-          isFavorite && "text-warning"
-        )}
-      >
-        <Star
-          className={cn("h-4 w-4", isFavorite && "fill-current")}
-          aria-hidden="true"
-        />
-      </button>
+      <div className="absolute top-3 right-3 flex items-center gap-1">
+        <button
+          type="button"
+          onClick={() => downloadDocument(document.id)}
+          aria-label={`Download ${document.title}`}
+          className={cn(
+            "inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground",
+            FOCUS_RING_CLASS
+          )}
+        >
+          <Download className="h-4 w-4" aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          onClick={onDelete}
+          aria-label={`Delete ${document.title}`}
+          className={cn(
+            "inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-destructive",
+            FOCUS_RING_CLASS
+          )}
+        >
+          <Trash2 className="h-4 w-4" aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          onClick={onToggleFavorite}
+          aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
+          aria-pressed={isFavorite}
+          className={cn(
+            "inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground",
+            FOCUS_RING_CLASS,
+            isFavorite && "text-warning"
+          )}
+        >
+          <Star
+            className={cn("h-4 w-4", isFavorite && "fill-current")}
+            aria-hidden="true"
+          />
+        </button>
+      </div>
     </div>
   );
 }

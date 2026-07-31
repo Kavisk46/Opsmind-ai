@@ -16,7 +16,9 @@ class ConversationStore(Protocol):
     tests/test_conversation_service.py).
     """
 
-    async def create(self, *, user_id: uuid.UUID, title: str) -> Conversation: ...
+    async def create(
+        self, *, user_id: uuid.UUID, workspace_id: uuid.UUID, title: str
+    ) -> Conversation: ...
     async def get_by_id(self, id: uuid.UUID) -> Conversation | None: ...
     async def list_by_owner(self, owner_id: uuid.UUID) -> list[Conversation]: ...
     async def update(self, instance: Conversation, **fields) -> Conversation: ...
@@ -29,9 +31,20 @@ class MessageStore(Protocol):
     """
 
     async def create(
-        self, *, conversation_id: uuid.UUID, role: str, content: str
+        self,
+        *,
+        conversation_id: uuid.UUID,
+        role: str,
+        content: str,
+        extra_metadata: dict | None = None,
     ) -> Message: ...
     async def list_by_conversation(self, conversation_id: uuid.UUID) -> list[Message]: ...
+
+
+class EmptyTitleError(Exception):
+    """Raised when renaming a conversation to a blank/whitespace-only
+    title — same "never worth persisting" reasoning as EmptyQuestionError.
+    """
 
 
 class ConversationNotFoundError(Exception):
@@ -90,6 +103,7 @@ class ConversationService:
         self,
         *,
         owner_id: uuid.UUID,
+        workspace_id: uuid.UUID,
         conversation_id: uuid.UUID | None,
         title_hint: str,
     ) -> Conversation:
@@ -98,8 +112,13 @@ class ConversationService:
             # question — good enough for an MVP conversation list; a
             # dedicated "generate a title" LLM call would be a real
             # improvement, not justified yet by any UI that shows titles.
+            # workspace_id is stamped for organizational/audit purposes
+            # only (see models/conversation.py's own docstring) — it is
+            # NOT what get_conversation_with_messages/delete_conversation
+            # below scope visibility by; those stay owner_id-based
+            # (private-by-default), a deliberate, staged deferral.
             conversation = await self.conversation_repository.create(
-                user_id=owner_id, title=title_hint[:80]
+                user_id=owner_id, workspace_id=workspace_id, title=title_hint[:80]
             )
             logger.info(
                 "conversation created",
@@ -124,7 +143,12 @@ class ConversationService:
         return existing_conversation
 
     async def append_message(
-        self, *, conversation_id: uuid.UUID, role: str, content: str
+        self,
+        *,
+        conversation_id: uuid.UUID,
+        role: str,
+        content: str,
+        metadata: dict | None = None,
     ) -> Message:
         """Takes a conversation_id, not a Conversation object — this is
         what lets both ChatService (which already has the object in
@@ -135,9 +159,16 @@ class ConversationService:
         for the updated_at bump below; a small, accepted cost at this
         project's scale, the same reasoning already applied to
         RAGRetrievalTool's per-chunk citation lookups.
+
+        `metadata` is provider/model/tool_used/token-count info for an
+        ASSISTANT message (see ChatService.ask()) — always None for a
+        user message, which produced none of that.
         """
         message = await self.message_repository.create(
-            conversation_id=conversation_id, role=role, content=content
+            conversation_id=conversation_id,
+            role=role,
+            content=content,
+            extra_metadata=metadata,
         )
 
         conversation = await self.conversation_repository.get_by_id(conversation_id)
@@ -165,6 +196,23 @@ class ConversationService:
             raise ConversationNotFoundError(conversation_id)
         messages = await self.message_repository.list_by_conversation(conversation_id)
         return conversation, messages
+
+    async def rename_conversation(
+        self, *, owner_id: uuid.UUID, conversation_id: uuid.UUID, title: str
+    ) -> Conversation:
+        """Backs PATCH /conversations/{id}. Same ownership check as every
+        other method here (get_by_id + compare user_id, not a query
+        scoped by owner_id directly) — same anti-enumeration reasoning:
+        renaming someone else's conversation 404s exactly like deleting
+        or reading one does.
+        """
+        if not title.strip():
+            raise EmptyTitleError()
+
+        conversation = await self.conversation_repository.get_by_id(conversation_id)
+        if conversation is None or conversation.user_id != owner_id:
+            raise ConversationNotFoundError(conversation_id)
+        return await self.conversation_repository.update(conversation, title=title.strip())
 
     async def delete_conversation(
         self, *, owner_id: uuid.UUID, conversation_id: uuid.UUID

@@ -149,3 +149,62 @@ def test_delete_another_users_conversation_returns_404(client):
 
     response = client.delete(f"/conversations/{created['id']}", headers=headers_b)
     assert response.status_code == 404
+
+
+# --- rename ---
+
+
+def test_rename_conversation_returns_200_and_updates_title(client):
+    headers = _auth_headers(client, email="conv-rename@example.com")
+    created = client.post(
+        "/conversations", headers=headers, json={"title": "original"}
+    ).json()
+
+    response = client.patch(
+        f"/conversations/{created['id']}", headers=headers, json={"title": "renamed"}
+    )
+
+    assert response.status_code == 200
+    assert response.json()["title"] == "renamed"
+
+    get_response = client.get(f"/conversations/{created['id']}", headers=headers)
+    assert get_response.json()["title"] == "renamed"
+
+
+def test_rename_conversation_with_empty_title_returns_400(client):
+    headers = _auth_headers(client, email="conv-rename-empty@example.com")
+    created = client.post(
+        "/conversations", headers=headers, json={"title": "original"}
+    ).json()
+
+    response = client.patch(
+        f"/conversations/{created['id']}", headers=headers, json={"title": "   "}
+    )
+
+    assert response.status_code == 400
+
+
+def test_rename_nonexistent_conversation_returns_404(client):
+    headers = _auth_headers(client, email="conv-rename-404@example.com")
+    response = client.patch(
+        f"/conversations/{uuid.uuid4()}", headers=headers, json={"title": "anything"}
+    )
+    assert response.status_code == 404
+
+
+def test_rename_another_users_conversation_returns_404(client):
+    headers_a = _auth_headers(client, email="conv-owner-g@example.com")
+    headers_b = _auth_headers(client, email="conv-owner-h@example.com")
+    created = client.post(
+        "/conversations", headers=headers_a, json={"title": "private"}
+    ).json()
+
+    response = client.patch(
+        f"/conversations/{created['id']}", headers=headers_b, json={"title": "hijacked"}
+    )
+    assert response.status_code == 404
+
+
+def test_rename_conversation_without_auth_returns_401(client):
+    response = client.patch(f"/conversations/{uuid.uuid4()}", json={"title": "anything"})
+    assert response.status_code == 401

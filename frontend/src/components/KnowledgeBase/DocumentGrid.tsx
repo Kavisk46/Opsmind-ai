@@ -12,6 +12,7 @@ interface DocumentGridProps {
   favoriteIds: string[];
   onToggleFavorite: (documentId: string) => void;
   onOpenDocument: (documentId: string) => void;
+  onDeleteDocument: (documentId: string, title: string) => void;
   isLoading: boolean;
   emptyState: ReactNode;
 }
@@ -44,6 +45,7 @@ export function DocumentGrid({
   favoriteIds,
   onToggleFavorite,
   onOpenDocument,
+  onDeleteDocument,
   isLoading,
   emptyState,
 }: DocumentGridProps) {
@@ -80,6 +82,7 @@ export function DocumentGrid({
             isFavorite={favoriteSet.has(document.id)}
             onOpen={() => onOpenDocument(document.id)}
             onToggleFavorite={() => onToggleFavorite(document.id)}
+            onDelete={() => onDeleteDocument(document.id, document.title)}
           />
         </li>
       ))}
