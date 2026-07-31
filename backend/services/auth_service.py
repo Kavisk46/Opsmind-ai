@@ -1,4 +1,5 @@
 import asyncio
+import time
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -6,6 +7,10 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config import settings
+
+# TEMPORARY debug instrumentation for the login-timeout investigation —
+# remove once the root cause is confirmed and fixed.
+from core.logging import logger
 from core.security import (
     create_access_token,
     create_refresh_token,
@@ -62,20 +67,37 @@ class AuthService:
         by signature+expiry alone); refresh tokens are, since revocation
         requires a row to revoke.
         """
+        logger.info("JWT_START")
+        jwt_start = time.perf_counter()
         access_token = create_access_token(subject=str(user_id))
         refresh_token = create_refresh_token()
+        logger.info("JWT_END elapsed_ms=%.1f", (time.perf_counter() - jwt_start) * 1000)
 
+        logger.info("DB_INSERT_START (refresh_tokens.create)")
+        db_start = time.perf_counter()
         await self.refresh_tokens.create(
             user_id=user_id,
             token_hash=hash_refresh_token(refresh_token),
             expires_at=datetime.now(UTC)
             + timedelta(days=settings.refresh_token_expire_days),
         )
+        logger.info(
+            "DB_INSERT_END (refresh_tokens.create) elapsed_ms=%.1f",
+            (time.perf_counter() - db_start) * 1000,
+        )
 
         return TokenPair(access_token=access_token, refresh_token=refresh_token)
 
     async def login(self, *, email: str, password: str) -> TokenPair:
+        logger.info("DB_LOOKUP_START (get_by_email)")
+        db_start = time.perf_counter()
         user = await self.users.get_by_email(email)
+        logger.info(
+            "DB_LOOKUP_END (get_by_email) elapsed_ms=%.1f found=%s",
+            (time.perf_counter() - db_start) * 1000,
+            user is not None,
+        )
+
         # Short-circuits on `user is None` OR a None password_hash (an
         # OAuth-only account — see models/user.py) exactly as it did
         # before this only checked `user is None`: bcrypt is never
@@ -86,6 +108,8 @@ class AuthService:
         # duration, which this phase's load testing caught directly
         # (100% login failure at just 15 concurrent users, each queued
         # behind others' bcrypt calls).
+        logger.info("PASSWORD_VERIFY_START")
+        verify_start = time.perf_counter()
         if (
             user is None
             or user.password_hash is None
@@ -93,7 +117,15 @@ class AuthService:
                 verify_password, password, user.password_hash
             )
         ):
+            logger.info(
+                "PASSWORD_VERIFY_END elapsed_ms=%.1f result=invalid",
+                (time.perf_counter() - verify_start) * 1000,
+            )
             raise InvalidCredentialsError()
+        logger.info(
+            "PASSWORD_VERIFY_END elapsed_ms=%.1f result=valid",
+            (time.perf_counter() - verify_start) * 1000,
+        )
 
         return await self.issue_token_pair(user.id)
 

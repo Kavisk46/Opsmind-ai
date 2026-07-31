@@ -52,10 +52,15 @@ async def lifespan(app: FastAPI):
     (embedding model, vector store, LLM) DOES exist now, but deliberately
     ISN'T constructed here: all three (api/dependencies.py's
     _embedding_model/_vector_store/_llm) are process-wide singletons
-    built at import time, with the genuinely expensive part (real model
-    weights) deferred to first real use, not app startup — see
-    core/embeddings.py's and services/llm/local_provider.py's docstrings for why eager
-    loading here would also mean every test run pays that cost.
+    built at import time, but EVERY genuinely expensive part — real model
+    weights, the chromadb import itself, the actual PersistentClient/
+    collection construction — is deferred to first real use, not app
+    startup, so this process's startup memory footprint stays small
+    regardless of which of these ever actually gets used. See
+    core/embeddings.py's, core/vector_store.py's, and services/llm/
+    local_provider.py's docstrings for the same lazy-loading trade-off
+    applied three times, and why eager loading here would also mean
+    every test run — and every Render deploy — pays that cost upfront.
     """
     # Fail fast and loud, not silently — a hardcoded, world-readable
     # default secret signing every JWT this process issues is the single

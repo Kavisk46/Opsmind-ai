@@ -1,4 +1,25 @@
-import chromadb
+from typing import TYPE_CHECKING
+
+from core.logging import logger
+
+if TYPE_CHECKING:
+    # Only for type-checking — the real `import chromadb` stays lazy,
+    # inside _ensure_collection() below, mirroring the exact pattern
+    # services/llm/local_provider.py already uses for `transformers`.
+    # `import chromadb` at module scope pulls in its full dependency
+    # chain (onnxruntime, numpy, chromadb's own embedded execution
+    # engine) the moment ANYTHING imports this module — which happened
+    # unconditionally at process startup via api/dependencies.py's
+    # module-level `_vector_store = VectorStore(...)`, regardless of
+    # whether a single request ever touched retrieval. That eager cost,
+    # stacked on top of sentence-transformers/torch (see core/
+    # embeddings.py), is what pushed this process's startup RSS over
+    # Render's memory limit (exit code 137). Deferring both the import
+    # AND the client/collection construction to first real use is what
+    # actually fixes it — constructing this object now costs nothing
+    # beyond remembering a path string.
+    from chromadb import ClientAPI
+    from chromadb.api.models.Collection import Collection
 
 # ChromaDB's default distance metric is squared L2, not cosine — fine for
 # some use cases, but cosine is the metric embedding models like
@@ -44,13 +65,37 @@ class VectorStore:
     opens a directory. Swapping this for a hosted Chroma server, or a
     different vector database entirely, later means rewriting this one
     class — nothing that calls it changes.
+
+    Constructing this object is now cheap — it only remembers
+    `persist_dir`. The real chromadb import and the actual
+    PersistentClient/collection construction (real disk I/O, and a
+    non-trivial chunk of RSS just from chromadb's own dependency chain)
+    are deferred to `_ensure_collection()`, called by every method below
+    that actually needs the collection. This mirrors
+    SentenceTransformerEmbeddingModel's (core/embeddings.py) and
+    LocalTransformersProvider's (services/llm/local_provider.py) existing
+    lazy-loading trade-off: predictable startup memory at the cost of the
+    first real call being slightly slower.
     """
 
     def __init__(self, persist_dir: str):
-        self._client = chromadb.PersistentClient(path=persist_dir)
-        self._collection = self._client.get_or_create_collection(
-            "documents", metadata=_COLLECTION_METADATA
-        )
+        self._persist_dir = persist_dir
+        self._client: ClientAPI | None = None
+        self._collection: Collection | None = None
+
+    def _ensure_collection(self) -> "Collection":
+        if self._collection is None:
+            import chromadb
+
+            logger.info(
+                "Loading ChromaDB client for the first time (persist_dir=%s)",
+                self._persist_dir,
+            )
+            self._client = chromadb.PersistentClient(path=self._persist_dir)
+            self._collection = self._client.get_or_create_collection(
+                "documents", metadata=_COLLECTION_METADATA
+            )
+        return self._collection
 
     def add_chunks(
         self,
@@ -77,6 +122,7 @@ class VectorStore:
         # owner_id is stored as metadata specifically so retrieve()/query()
         # can filter to "only this user's documents" without a separate
         # per-user collection.
+        collection = self._ensure_collection()
         if page_numbers is None:
             page_numbers = [None] * len(chunks)
 
@@ -109,7 +155,7 @@ class VectorStore:
             # ChromaDB — see tests/test_vector_store.py). The stub being
             # stricter than the library actually is, not a bug here — hence
             # the ignore on the specific line mypy flags below.
-            self._collection.upsert(
+            collection.upsert(
                 ids=ids,
                 embeddings=embeddings,  # type: ignore[arg-type]
                 documents=chunks,
@@ -128,10 +174,11 @@ class VectorStore:
         "which stored chunks are most semantically similar to this
         vector," which is exactly what RetrievalService calls this for.
         """
+        collection = self._ensure_collection()
         try:
             # Same stub-vs-reality gap as upsert() above — query_embeddings
             # accepts a plain list[list[float]] at runtime.
-            results = self._collection.query(
+            results = collection.query(
                 query_embeddings=[query_embedding],  # type: ignore[arg-type]
                 n_results=top_k,
                 where={"owner_id": owner_id},
@@ -180,12 +227,13 @@ class VectorStore:
         return chunks
 
     def delete_by_document(self, *, document_id: str) -> None:
+        collection = self._ensure_collection()
         try:
-            self._collection.delete(where={"document_id": document_id})
+            collection.delete(where={"document_id": document_id})
         except Exception as error:
             raise VectorStoreUnavailableError(str(error)) from error
 
     def count(self) -> int:
         # Test/verification convenience — not used by the ingestion
         # pipeline itself.
-        return self._collection.count()
+        return self._ensure_collection().count()

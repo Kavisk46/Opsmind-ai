@@ -35,6 +35,22 @@ class Settings(BaseSettings):
     db_pool_size: int = 5
     db_max_overflow: int = 10
 
+    # asyncpg's own default connect timeout is 60 SECONDS (verified
+    # directly against the installed asyncpg version's own signature) —
+    # meaning a Postgres that's slow to accept a new connection (a
+    # managed/serverless instance waking from idle, a network hiccup)
+    # currently hangs the whole request for up to a full minute with no
+    # error logged at all, far past any frontend client timeout (this
+    # project's frontend apiClient defaults to 15s — see lib/api/
+    # client.ts's DEFAULT_TIMEOUT_MS). A real production incident traced
+    # a login timeout to exactly this: the browser gave up and reported
+    # "Request timed out" while the backend was still silently waiting
+    # on asyncpg's 60s default. Set here, explicitly, well under every
+    # client timeout in this project, so a genuinely slow/unreachable
+    # database fails FAST with a clear, loggable error instead of
+    # hanging silently until a client somewhere else gives up first.
+    db_connect_timeout_seconds: float = 5.0
+
     # JWT signing. The dev default below is fine for local work but MUST be
     # overridden with a real secret in any real deployment — anyone who
     # knows this value can forge valid tokens for any user. main.py's

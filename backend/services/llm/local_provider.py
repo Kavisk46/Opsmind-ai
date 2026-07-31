@@ -114,6 +114,10 @@ class LocalTransformersProvider:
         if self._pipeline is None:
             from transformers import pipeline
 
+            logger.info(
+                "Loading local transformers model '%s' for the first time",
+                self._model_name,
+            )
             self._pipeline = pipeline("text-generation", model=self._model_name)
 
         messages = [{"role": "user", "content": prompt}]

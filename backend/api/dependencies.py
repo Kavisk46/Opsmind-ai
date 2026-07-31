@@ -1,3 +1,4 @@
+import time
 import uuid
 
 import jwt
@@ -9,6 +10,10 @@ from core.config import settings
 from core.cookies import ACCESS_TOKEN_COOKIE_NAME
 from core.database import async_session_factory, get_db
 from core.embeddings import SentenceTransformerEmbeddingModel
+
+# TEMPORARY debug instrumentation for the login-timeout investigation —
+# remove once the root cause is confirmed and fixed.
+from core.logging import logger
 from core.rate_limit import RateLimiter
 from core.request_context import set_user_id
 from core.security import decode_access_token
@@ -79,6 +84,7 @@ async def get_current_user(
     the cookie, so which one wins first never actually matters in
     practice — only one is ever present at a time.
     """
+    logger.info("AUTH_START")
     credentials_error = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -89,13 +95,30 @@ async def get_current_user(
     if token is None:
         raise credentials_error
 
+    logger.info("TOKEN_VERIFY_START")
+    token_verify_start = time.perf_counter()
     try:
         subject = decode_access_token(token)
         user_id = uuid.UUID(subject)
     except (jwt.PyJWTError, ValueError) as error:
+        logger.info(
+            "TOKEN_VERIFY_END elapsed_ms=%.1f result=invalid",
+            (time.perf_counter() - token_verify_start) * 1000,
+        )
         raise credentials_error from error
+    logger.info(
+        "TOKEN_VERIFY_END elapsed_ms=%.1f result=valid",
+        (time.perf_counter() - token_verify_start) * 1000,
+    )
 
+    logger.info("DATABASE_LOOKUP_START")
+    db_lookup_start = time.perf_counter()
     user = await UserRepository(db).get_by_id(user_id)
+    logger.info(
+        "DATABASE_LOOKUP_END elapsed_ms=%.1f found=%s",
+        (time.perf_counter() - db_lookup_start) * 1000,
+        user is not None,
+    )
     if user is None:
         raise credentials_error
 
@@ -232,14 +255,20 @@ def require_workspace_permission(permission: WorkspacePermission):
 _storage = LocalStorage(settings.storage_dir)
 
 
-# Also process-wide singletons, same reasoning as _storage above.
-# SentenceTransformerEmbeddingModel's constructor is cheap (it only
-# remembers the model name — see core/embeddings.py's docstring for why
-# real weight-loading is deferred to first use, not done here at import
-# time). VectorStore's constructor opens/creates a local Chroma index —
-# real disk I/O, but no network call and no ML model loading, so doing it
-# eagerly at import time is fine (identical reasoning to _storage
-# creating its directory eagerly).
+# Also process-wide singletons, same reasoning as _storage above — but
+# UNLIKE _storage, both constructors here are now cheap on purpose.
+# SentenceTransformerEmbeddingModel only remembers the model name; the
+# `sentence_transformers` import itself and the real model weights are
+# both deferred to first embed() call (see core/embeddings.py).
+# VectorStore only remembers persist_dir; the `chromadb` import and the
+# actual PersistentClient/collection construction are both deferred to
+# first real use (see core/vector_store.py's _ensure_collection()).
+# This used to construct the Chroma client eagerly here, at import time
+# — real disk I/O plus chromadb's own dependency chain (onnxruntime,
+# numpy) loaded into every process regardless of whether retrieval was
+# ever used, which measurably contributed to Render OOM-killing this
+# service (exit code 137) at startup. Deferring both this and the
+# embedding model's import is what fixed it.
 _embedding_model = SentenceTransformerEmbeddingModel(settings.embedding_model_name)
 _vector_store = VectorStore(settings.chroma_persist_dir)
 

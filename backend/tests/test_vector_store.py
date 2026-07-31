@@ -29,6 +29,28 @@ def _vec(*values: float) -> list[float]:
     return list(values)
 
 
+# --- lazy client/collection construction ---
+# Locks in the OOM fix directly: constructing VectorStore must never
+# create a real chromadb client/collection — that's deferred to the
+# first method call that actually needs it (_ensure_collection()).
+
+
+def test_construction_does_not_create_a_chroma_client(tmp_path):
+    store = VectorStore(str(tmp_path))
+    assert store._client is None
+    assert store._collection is None
+
+
+def test_first_real_call_lazily_creates_the_client_and_collection(vector_store):
+    assert vector_store._client is None
+    assert vector_store._collection is None
+
+    vector_store.count()
+
+    assert vector_store._client is not None
+    assert vector_store._collection is not None
+
+
 # --- add_chunks / query round trip ---
 
 
@@ -191,6 +213,10 @@ def test_add_chunks_wraps_a_chroma_failure_in_vector_store_unavailable_error(vec
     def _broken_upsert(*args, **kwargs):
         raise RuntimeError("disk is full")
 
+    # _collection is now None until the first real use (lazy-loading —
+    # see VectorStore._ensure_collection()) — force real construction
+    # before monkeypatching the collection's own method.
+    vector_store._ensure_collection()
     vector_store._collection.upsert = _broken_upsert
 
     with pytest.raises(VectorStoreUnavailableError, match="disk is full"):
@@ -204,6 +230,7 @@ def test_query_wraps_a_chroma_failure_in_vector_store_unavailable_error(vector_s
     def _broken_query(*args, **kwargs):
         raise RuntimeError("index corrupted")
 
+    vector_store._ensure_collection()
     vector_store._collection.query = _broken_query
 
     with pytest.raises(VectorStoreUnavailableError, match="index corrupted"):
@@ -216,6 +243,7 @@ def test_delete_by_document_wraps_a_chroma_failure_in_vector_store_unavailable_e
     def _broken_delete(*args, **kwargs):
         raise RuntimeError("permission denied")
 
+    vector_store._ensure_collection()
     vector_store._collection.delete = _broken_delete
 
     with pytest.raises(VectorStoreUnavailableError, match="permission denied"):

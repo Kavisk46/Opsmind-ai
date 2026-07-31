@@ -365,6 +365,9 @@ export class ApiClient {
     let attempt = 0;
     let hasTriedRefresh = false;
 
+    // eslint-disable-next-line no-console -- temporary debug instrumentation, remove after diagnosis
+    console.log("API CLIENT: REQUEST START", { method, path, attempt });
+
     for (;;) {
       try {
         return await this.executeOnce<T>(method, path, body, options);
@@ -432,6 +435,10 @@ export class ApiClient {
         signal: mergeSignals([options.signal, timeoutController.signal]),
       });
 
+      // eslint-disable-next-line no-console -- temporary debug instrumentation, remove after diagnosis
+      console.log("API CLIENT: FETCH START", { url: config.url, method: config.method });
+      const fetchStartedAt = performance.now();
+
       const rawResponse = await fetch(config.url, {
         method: config.method,
         headers: config.headers,
@@ -445,6 +452,13 @@ export class ApiClient {
         credentials: "include",
       });
 
+      // eslint-disable-next-line no-console -- temporary debug instrumentation, remove after diagnosis
+      console.log("API CLIENT: FETCH RESPONSE", {
+        url: config.url,
+        status: rawResponse.status,
+        elapsedMs: Math.round(performance.now() - fetchStartedAt),
+      });
+
       const response = await this.responseInterceptors.run(rawResponse);
 
       if (!response.ok) {
@@ -454,6 +468,8 @@ export class ApiClient {
       return await this.parseResponse<T>(response);
     } finally {
       clearTimeout(timeoutId);
+      // eslint-disable-next-line no-console -- temporary debug instrumentation, remove after diagnosis
+      console.log("API CLIENT: FETCH END", { method, path });
     }
   }
 

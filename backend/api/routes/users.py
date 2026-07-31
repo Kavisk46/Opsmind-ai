@@ -3,6 +3,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dependencies import get_current_user, get_signup_rate_limiter, require_role
 from core.database import get_db
+
+# TEMPORARY debug instrumentation for the login-timeout investigation —
+# remove once the root cause is confirmed and fixed.
+from core.logging import logger
 from core.rate_limit import RateLimiter
 from models.user import User, UserRole
 from schemas.user import UserCreate, UserResponse
@@ -41,6 +45,13 @@ async def get_my_profile(current_user: User = Depends(get_current_user)) -> User
     # no repository call of its own — get_current_user() already did all
     # of that to prove the token was valid, and handed back the user.
     # This route exists purely to demonstrate the dependency working.
+    #
+    # USER_SERIALIZATION (response_model=UserResponse, Pydantic's
+    # from_attributes=True) happens AFTER this function returns, inside
+    # FastAPI itself — not instrumentable from here. Its cost is the gap
+    # between REQUEST_COMPLETE below and the request's total duration
+    # (see main.py's X-Process-Time header / per-request log line).
+    logger.info("REQUEST_COMPLETE")
     return current_user
 
 

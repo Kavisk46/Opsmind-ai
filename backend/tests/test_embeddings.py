@@ -1,3 +1,5 @@
+import sys
+
 from core.embeddings import SentenceTransformerEmbeddingModel
 
 # No test here ever calls .embed() — doing so would trigger a REAL
@@ -29,3 +31,15 @@ def test_construction_stores_model_name_without_touching_the_network():
     model = SentenceTransformerEmbeddingModel("not-a-real-model-name")
     assert model._model_name == "not-a-real-model-name"
     assert model._model is None
+
+
+def test_importing_this_module_does_not_import_sentence_transformers():
+    # Locks in the OOM fix directly: `sentence_transformers` (which
+    # transitively imports torch — a substantial RSS cost on its own,
+    # even before any model loads) must not appear in sys.modules just
+    # because core.embeddings was imported. This module itself is
+    # already imported by the time this test runs (see the top of this
+    # file) — if that alone had pulled in sentence_transformers/torch,
+    # this assertion would already be failing for every test in the
+    # whole suite, not just this one.
+    assert "sentence_transformers" not in sys.modules

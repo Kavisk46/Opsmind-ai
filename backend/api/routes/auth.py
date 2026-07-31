@@ -1,3 +1,5 @@
+import time
+
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -8,6 +10,10 @@ from core.cookies import (
     set_auth_cookies,
 )
 from core.database import get_db
+
+# TEMPORARY debug instrumentation for the login-timeout investigation —
+# remove once the root cause is confirmed and fixed.
+from core.logging import logger
 from core.rate_limit import RateLimiter
 from schemas.auth import LoginRequest, TokenResponse
 from services.auth_service import (
@@ -34,6 +40,8 @@ async def login(
     # point is slowing down automated guessing, not fingerprinting
     # individual users — a real IP-sharing false positive is an
     # acceptable, honest trade-off at this project's scale.
+    logger.info("LOGIN_START")
+    login_start = time.perf_counter()
     client_host = request.client.host if request.client else "unknown"
     rate_limiter.check(client_host)
 
@@ -51,8 +59,22 @@ async def login(
     # (and this project's own test suite, which reads it directly); the
     # cookies are what the deployed frontend actually relies on (see
     # api/dependencies.py's get_current_user, which accepts either).
+    logger.info("COOKIE_START")
+    cookie_start = time.perf_counter()
     set_auth_cookies(
         response, access_token=tokens.access_token, refresh_token=tokens.refresh_token
+    )
+    logger.info(
+        "COOKIE_END elapsed_ms=%.1f", (time.perf_counter() - cookie_start) * 1000
+    )
+
+    # Response serialization (Pydantic, via response_model=TokenResponse)
+    # happens AFTER this function returns, inside FastAPI itself — not
+    # instrumentable from here. Its cost = the request's total duration
+    # (see main.py's X-Process-Time response header / per-request log
+    # line) minus this LOGIN_COMPLETE elapsed_total.
+    logger.info(
+        "LOGIN_COMPLETE elapsed_total_ms=%.1f", (time.perf_counter() - login_start) * 1000
     )
     return TokenResponse(access_token=tokens.access_token)
 

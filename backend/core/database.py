@@ -1,7 +1,13 @@
+import time
+
 from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from core.config import settings
+
+# TEMPORARY debug instrumentation for the login-timeout investigation —
+# remove once the root cause is confirmed and fixed.
+from core.logging import logger
 
 # Managed Postgres providers (Neon, Supabase, RDS, ...) hand out
 # connection strings with libpq-style query params — sslmode,
@@ -19,7 +25,13 @@ from core.config import settings
 # difference_update_query is SQLAlchemy's own URL API for this — no
 # manual string/regex parsing of the connection string.
 _url = make_url(settings.database_url)
-_connect_args = {}
+# `timeout` is asyncpg.connect()'s own parameter name for how long to wait
+# for the TCP/TLS/auth handshake to complete — asyncpg's own default is
+# 60 seconds (verified directly), which is what let a slow/unreachable
+# database hang a request silently for up to a minute with nothing in
+# the logs. See Settings.db_connect_timeout_seconds's own docstring for
+# the production incident this traces back to.
+_connect_args: dict[str, object] = {"timeout": settings.db_connect_timeout_seconds}
 if "sslmode" in _url.query:
     _connect_args["ssl"] = _url.query["sslmode"]
 _url = _url.difference_update_query(["sslmode", "channel_binding"])
@@ -72,7 +84,13 @@ async def get_db():
     async with async_session_factory() as session:
         try:
             yield session
+            logger.info("COMMIT_START")
+            commit_start = time.perf_counter()
             await session.commit()
+            logger.info(
+                "COMMIT_END elapsed_ms=%.1f",
+                (time.perf_counter() - commit_start) * 1000,
+            )
         except Exception:
             await session.rollback()
             raise
